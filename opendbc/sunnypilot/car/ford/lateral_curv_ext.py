@@ -489,10 +489,13 @@ class LateralCurvExt:
         path_angle = 0.0
 
       # Clip all signals to DBC limits
-      apply_curvature = clip(apply_curvature, -self.curvature_max, self.curvature_max)
-      desired_curvature_rate = clip(desired_curvature_rate, -self.curvature_rate_max, self.curvature_rate_max)
-      path_offset = clip(path_offset, -self.path_offset_max, self.path_offset_max)
-      path_angle = clip(path_angle, -self.path_angle_max, self.path_angle_max)
+      # float() is required: numpy's clip returns np.float64, and capnp rejects that type when
+      # apply_curvature reaches actuators.curvature via apply_curvature_last in carcontroller.py.
+      # The cast is exact (both are IEEE 754 doubles), so no output value changes.
+      apply_curvature = float(clip(apply_curvature, -self.curvature_max, self.curvature_max))
+      desired_curvature_rate = float(clip(desired_curvature_rate, -self.curvature_rate_max, self.curvature_rate_max))
+      path_offset = float(clip(path_offset, -self.path_offset_max, self.path_offset_max))
+      path_angle = float(clip(path_angle, -self.path_angle_max, self.path_angle_max))
 
       # Zero path_offset before CAN send (path_offset and path_angle can conflict, causing discomfort)
       path_offset = 0.0

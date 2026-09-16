@@ -246,7 +246,8 @@ class CarController(CarControllerBase, LateralCurvExt, LateralAngleExt):
     self.lead_distance_bars_last = hud_control.leadDistanceBars
 
     new_actuators = actuators.as_builder()
-    new_actuators.curvature = self.apply_curvature_last
+    # float(): capnp rejects np.float64, and the BP lateral strategies compute with numpy
+    new_actuators.curvature = float(self.apply_curvature_last)
     new_actuators.accel = self.accel
     new_actuators.gas = self.gas
 

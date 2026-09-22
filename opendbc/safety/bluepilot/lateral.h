@@ -15,7 +15,7 @@
 //   - the error boundary uses relaxed deltas and CONVERGES toward measured, rather than
 //     hard-clamping, so a wound-up command unwinds instead of instantly faulting
 //   - the ISO lateral accel cap is applied only on buses that need it (Q4/CAN FD)
-inline bool bp_curvature_rate_lookup_check(int desired_curvature, const CurvatureSteeringLimits *limits) {
+static inline bool bp_curvature_rate_lookup_check(int desired_curvature, const CurvatureSteeringLimits *limits) {
   bool violation = false;
 
   const float fudged_speed_lookup = (vehicle_speed.min / VEHICLE_SPEED_FACTOR) - 1.;

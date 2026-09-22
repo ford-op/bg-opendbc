@@ -19,6 +19,9 @@
 // BluePilot: steering-angle curvature measurement (bad-yaw-sensor workaround). Index 0 of
 // ford_pinion_geometry is reserved as invalid; see ford_init in modes/ford.h.
 #define FORD_PINION_GEOMETRY_COUNT 12U
+// Row count including the reserved index-0 entry. Kept as a plain literal: the mutation
+// harness rewrites arithmetic in array sizes into runtime expressions, which cannot compile.
+#define FORD_PINION_GEOMETRY_ROWS 13U
 
 // shadow_curvature is packed at scale 1e-6 1/m; convert to the CAN units steer_angle_cmd_checks
 // expects, matching FORD_STEERING_LIMITS/FORD_CANFD_STEERING_LIMITS.angle_deg_to_can (50000, i.e.
@@ -54,7 +57,7 @@
 // bits 1-4. Default off = stock yaw-sourced angle_meas. See ford_init in modes/ford.h.
 extern bool ford_bp_pinion_curvature;
 extern const AngleSteeringParams *ford_bp_pinion_params;
-extern const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_COUNT + 1U];
+extern const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS];
 
 // BluePilot: angle_mode_engaged + shadow_curvature, read out of Lane_Assist_Data1's unused
 // bits inside ford_tx_hook (no separate CAN message, no RX -- see fordcan_ext.py's
@@ -82,15 +85,15 @@ extern bool ford_bp_debug;
 // Function Declarations
 // ===============================
 
-extern bool path_angle_cmd_checks(int desired_path_angle, bool steer_control_enabled, AngleSteeringLimits limits);
-extern bool path_offset_cmd_checks(int desired_path_offset, bool steer_control_enabled, AngleSteeringLimits limits);
-extern bool curvature_rate_cmd_checks(int desired_curvature_rate, bool steer_control_enabled, AngleSteeringLimits limits);
-extern bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_control_enabled, CurvatureSteeringLimits limits);
-extern bool ford_reset_bypass_latch_check(int desired_curvature, int desired_path_angle);
+static inline bool path_angle_cmd_checks(int desired_path_angle, bool steer_control_enabled, AngleSteeringLimits limits);
+static inline bool path_offset_cmd_checks(int desired_path_offset, bool steer_control_enabled, AngleSteeringLimits limits);
+static inline bool curvature_rate_cmd_checks(int desired_curvature_rate, bool steer_control_enabled, AngleSteeringLimits limits);
+static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_control_enabled, CurvatureSteeringLimits limits);
+static inline bool ford_reset_bypass_latch_check(int desired_curvature, int desired_path_angle);
 
 // Shared curvature/curvature_rate/path_offset/path_angle command checks for LateralMotionControl
 // (CAN) and LateralMotionControl2 (CAN FD) -- see ford_lmc_checks in ford.h.
-extern bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
+static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
                             bool steer_control_enabled, const CurvatureSteeringLimits *curvature_limits,
                             const CurvatureSteeringLimits *curvature_limits_pinion, const AngleSteeringLimits *curvature_rate_limits,
                             const char *dbg_prefix);

@@ -11,4 +11,4 @@
 // steer_curvature_cmd_checks (opendbc/safety/lateral.h) when
 // CurvatureSteeringLimits.use_rate_lookup is set -- currently only Ford, see the FORD_LIMITS
 // macro in opendbc/safety/modes/ford.h.
-extern bool bp_curvature_rate_lookup_check(int desired_curvature, const CurvatureSteeringLimits *limits);
+static inline bool bp_curvature_rate_lookup_check(int desired_curvature, const CurvatureSteeringLimits *limits);

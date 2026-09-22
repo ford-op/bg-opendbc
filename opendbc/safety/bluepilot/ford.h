@@ -23,7 +23,7 @@ const AngleSteeringParams *ford_bp_pinion_params = &ford_pinion_geometry[0];
 // out-of-range index so a half-configured param can never select the wrong geometry.
 // FORD_EDGE_MK2 (ALT_STEER_ANGLE: relative pinion angle + learned offset) is unsupported
 // and deliberately absent.
-const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_COUNT + 1U] = {
+const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS] = {
   {.slip_factor = 0.0f, .steer_ratio = 1.0f, .wheelbase = 1.0f},                  // 0: invalid
   {.slip_factor = -0.00062819555f, .steer_ratio = 17.7f, .wheelbase = 2.670f},    // 1: FORD_BRONCO_SPORT_MK1
   {.slip_factor = -0.00061892325f, .steer_ratio = 16.7f, .wheelbase = 2.710f},    // 2: FORD_ESCAPE_MK4
@@ -126,7 +126,7 @@ static const AngleSteeringLimits FORD_CURVATURE_RATE_LIMITS_CANFD = {
 // Function Implementations
 // ===============================
 
-inline bool path_angle_cmd_checks(int desired_path_angle, bool steer_control_enabled, const AngleSteeringLimits limits) {
+static inline bool path_angle_cmd_checks(int desired_path_angle, bool steer_control_enabled, const AngleSteeringLimits limits) {
   bool violation = false;
 
   if (steer_control_enabled) {
@@ -155,7 +155,7 @@ inline bool path_angle_cmd_checks(int desired_path_angle, bool steer_control_ena
   return violation;
 }
 
-inline bool path_offset_cmd_checks(int desired_path_offset, bool steer_control_enabled, const AngleSteeringLimits limits) {
+static inline bool path_offset_cmd_checks(int desired_path_offset, bool steer_control_enabled, const AngleSteeringLimits limits) {
   bool violation = false;
 
   if (steer_control_enabled) {
@@ -185,7 +185,7 @@ inline bool path_offset_cmd_checks(int desired_path_offset, bool steer_control_e
   return violation;
 }
 
-inline bool curvature_rate_cmd_checks(int desired_curvature_rate, bool steer_control_enabled, const AngleSteeringLimits limits) {
+static inline bool curvature_rate_cmd_checks(int desired_curvature_rate, bool steer_control_enabled, const AngleSteeringLimits limits) {
   bool violation = false;
 
   if (steer_control_enabled) {
@@ -230,7 +230,7 @@ inline bool curvature_rate_cmd_checks(int desired_curvature_rate, bool steer_con
 // proximity check: does this frame's steering intent make physical sense given where the car is.
 // BluePilot: enforce_angle_error is gone from the struct; the check is unconditional now because
 // the only caller passes FORD_STEERING_LIMITS(_PINION), both of which set it true pre-sync.
-inline bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_control_enabled,
+static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_control_enabled,
                                                const CurvatureSteeringLimits limits) {
   bool violation = false;
   if (steer_control_enabled &&
@@ -246,7 +246,7 @@ inline bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_
 // when both curvature and path_angle are zero (reset/neutral state), returning true so the
 // caller can bypass its violation for this frame and for a short ramp period afterward -- this
 // allows smooth ramp-up after human turn detection without blocked messages.
-inline bool ford_reset_bypass_latch_check(int desired_curvature, int desired_path_angle) {
+static inline bool ford_reset_bypass_latch_check(int desired_curvature, int desired_path_angle) {
   bool bypass = false;
   if ((desired_curvature == 0) && (desired_path_angle == 0)) {
     // Reset detected, activate latch for ramp period
@@ -267,7 +267,7 @@ inline bool ford_reset_bypass_latch_check(int desired_curvature, int desired_pat
 // signals and picks the right limit tables (curvature_rate_limits, and curvature_limits /
 // curvature_limits_pinion for the steer_curvature_cmd_checks + shadow-curvature call), and this
 // function does the rest. dbg_prefix labels the FORD_SAFETY_DBG output ("CAN Out" / "CANFD Out").
-inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
+static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
                             bool steer_control_enabled, const CurvatureSteeringLimits *curvature_limits,
                             const CurvatureSteeringLimits *curvature_limits_pinion, const AngleSteeringLimits *curvature_rate_limits,
                             const char *dbg_prefix) {

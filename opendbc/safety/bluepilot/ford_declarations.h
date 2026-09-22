@@ -26,7 +26,6 @@
 // shadow_curvature is packed at scale 1e-6 1/m; convert to the CAN units steer_angle_cmd_checks
 // expects, matching FORD_STEERING_LIMITS/FORD_CANFD_STEERING_LIMITS.angle_deg_to_can (50000, i.e.
 // physical scale 2e-5): raw * 1e-6 * 50000 = raw * 0.05.
-#define FORD_BP_SHADOW_CURVATURE_TO_CAN(raw) ((int)((float)(raw) * 0.05f))
 
 // Reset latch duration: ~3.0 seconds at 20Hz
 #define FORD_RESET_BYPASS_LATCH_DURATION 60U

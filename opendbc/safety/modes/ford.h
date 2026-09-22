@@ -131,9 +131,6 @@ static bool ford_get_quality_flag_valid(const CANPacket_t *msg) {
 }
 
 static const CurvatureSteeringLimits FORD_STEERING_LIMITS = FORD_LIMITS(false, 100);
-static const CurvatureSteeringLimits FORD_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
-static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS = FORD_LIMITS(true, 100);
-static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LIMITS(true, 150);
 
 
 // BluePilot: pinion-geometry table, reset latch, the PathAngle/PathOffset/curvature-rate limit
@@ -144,6 +141,7 @@ static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LI
 // ford_bp_shadow_curvature_raw, desired_path_angle_last, desired_path_offset_last,
 // desired_curvature_rate_last, reset_bypass_latch_counter), mirroring the mads.h /
 // mads_declarations.h split used by opendbc/safety/sunnypilot/.
+// cppcheck-suppress misra-c2012-20.1; needs the Ford constants defined above
 #include "opendbc/safety/bluepilot/ford.h"
 
 static void ford_rx_hook(const CANPacket_t *msg) {
@@ -225,6 +223,11 @@ static void ford_rx_hook(const CANPacket_t *msg) {
 }
 
 static bool ford_tx_hook(const CANPacket_t *msg) {
+  // BluePilot: only this hook reads these; FORD_STEERING_LIMITS stays file-scope for the rx hook
+  static const CurvatureSteeringLimits FORD_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
+  static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS = FORD_LIMITS(true, 100);
+  static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LIMITS(true, 150);
+
   const LongitudinalLimits FORD_LONG_LIMITS = {
     // acceleration cmd limits (used for brakes)
     // Signal: AccBrkTot_A_Rq
@@ -302,7 +305,8 @@ static bool ford_tx_hook(const CANPacket_t *msg) {
     // message being transmitted right now, same as curvature/path_angle elsewhere in this file --
     // no separate CAN ID, no RX round-trip.
     ford_bp_angle_mode_engaged = (msg->data[4] & 0x1U) != 0U;
-    ford_bp_shadow_curvature_raw = (int16_t)((msg->data[5] << 8) | msg->data[6]);
+    unsigned int shadow_curvature_raw = (msg->data[5] << 8) | msg->data[6];
+    ford_bp_shadow_curvature_raw = (int16_t)shadow_curvature_raw;
   }
 
   // Safety check for LateralMotionControl action

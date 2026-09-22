@@ -5,6 +5,12 @@ from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, Bus, DT_CTRL, apply_hystere
 from opendbc.car.ford import fordcan
 from opendbc.car.ford.values import CarControllerParams, FordFlags, CAR
 from opendbc.car.interfaces import CarControllerBase, V_CRUISE_MAX
+from openpilot.common.params import Params
+
+# BluePilot: 4-signal lateral control extensions (curvature-primary and angle-primary)
+from opendbc.car.bluepilot.ford.carcontroller_ext import CarControllerExt
+from opendbc.car.bluepilot.ford.lateral_angle_ext import LateralAngleExt
+from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt
 
 LongCtrlState = structs.CarControl.Actuators.LongControlState
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
@@ -32,12 +38,21 @@ def apply_creep_compensation(accel: float, v_ego: float) -> float:
   return float(accel)
 
 
-class CarController(CarControllerBase):
+# BluePilot: CarController inherits from LateralCurvExt and LateralAngleExt for 4-signal
+# lateral control (curvature- or angle-primary). Init order: CarControllerBase first
+# (sets self.CP, self.frame), then the extension classes.
+class CarController(CarControllerBase, LateralCurvExt, LateralAngleExt, CarControllerExt):
   def __init__(self, dbc_names, CP, CP_SP):
     super().__init__(dbc_names, CP, CP_SP)
+    # BluePilot: initialize lateral extension classes
+    LateralCurvExt.__init__(self, CP, CP_SP)
+    LateralAngleExt.__init__(self, CP, CP_SP)
+
+    self.params = Params()
     self.packer = CANPacker(dbc_names[Bus.pt])
     self.CAN = fordcan.CanBus(CP)
 
+    self.disable_BP_lat_UI = False
     self.apply_curvature_last = 0
     self.anti_overshoot_curvature_last = 0
     self.accel = 0.0
@@ -51,6 +66,13 @@ class CarController(CarControllerBase):
 
   def update(self, CC, CC_SP, CS, now_nanos):
     can_sends = []
+
+    # BluePilot: update SubMaster (modelV2, vehicleParameters, selfdriveState, lateralDelay)
+    # and the vehicle model, then read the lateral params from the UI
+    LateralCurvExt.update_sm(self)
+    LateralCurvExt.update_lateral_params(self, self.params)
+    LateralAngleExt.update_angle_params(self, self.params)
+    self.disable_BP_lat_UI = self.params.get_bool("disable_BP_lat_UI")
 
     actuators = CC.actuators
     hud_control = CC.hudControl
@@ -74,40 +96,45 @@ class CarController(CarControllerBase):
     ### lateral control ###
     # send steer msg at 20Hz
     if (self.frame % CarControllerParams.STEER_STEP) == 0:
-      # Bronco and some other cars consistently overshoot curv requests
-      # Apply some deadzone + smoothing convergence to avoid oscillations
-      if self.CP.carFingerprint in (CAR.FORD_BRONCO_SPORT_MK1, CAR.FORD_F_150_MK14):
-        self.anti_overshoot_curvature_last = anti_overshoot(actuators.curvature, self.anti_overshoot_curvature_last, CS.out.vEgoRaw)
-        apply_curvature = self.anti_overshoot_curvature_last
-      else:
-        apply_curvature = actuators.curvature
+      if self.disable_BP_lat_UI:
+        # Stock curvature-only path, unchanged from upstream. Used as the "BluePilot lateral off"
+        # fallback; anti-overshoot is not used when BP lateral is active.
+        # Bronco and some other cars consistently overshoot curv requests
+        # Apply some deadzone + smoothing convergence to avoid oscillations
+        if self.CP.carFingerprint in (CAR.FORD_BRONCO_SPORT_MK1, CAR.FORD_F_150_MK14):
+          self.anti_overshoot_curvature_last = anti_overshoot(actuators.curvature, self.anti_overshoot_curvature_last, CS.out.vEgoRaw)
+          apply_curvature = self.anti_overshoot_curvature_last
+        else:
+          apply_curvature = actuators.curvature
 
-      # apply rate limits, curvature error limit, and clip to signal range
-      current_curvature = -CS.out.yawRate / max(CS.out.vEgoRaw, 0.1)
-      # No blending at low speed due to lack of torque wind-up and inaccurate current curvature
-      if CS.out.vEgoRaw > 9:
-        apply_curvature = float(np.clip(apply_curvature, current_curvature - CarControllerParams.CURVATURE_ERROR,
-                                        current_curvature + CarControllerParams.CURVATURE_ERROR))
-      apply_curvature = CarControllerParams.CURVATURE_LIMITS.apply_limits(apply_curvature, self.apply_curvature_last, CS.out.vEgoRaw,
-                                                                          0., CC.latActive, CarControllerParams.STEER_STEP)
-      self.apply_curvature_last = apply_curvature
+        # apply rate limits, curvature error limit, and clip to signal range
+        current_curvature = -CS.out.yawRate / max(CS.out.vEgoRaw, 0.1)
+        # No blending at low speed due to lack of torque wind-up and inaccurate current curvature
+        if CS.out.vEgoRaw > 9:
+          apply_curvature = float(np.clip(apply_curvature, current_curvature - CarControllerParams.CURVATURE_ERROR,
+                                          current_curvature + CarControllerParams.CURVATURE_ERROR))
+        apply_curvature = CarControllerParams.CURVATURE_LIMITS.apply_limits(apply_curvature, self.apply_curvature_last, CS.out.vEgoRaw,
+                                                                            0., CC.latActive, CarControllerParams.STEER_STEP)
+        self.apply_curvature_last = apply_curvature
 
-      if self.CP.flags & FordFlags.CANFD:
-        # TODO: extended mode
-        # Ford uses four individual signals to dictate how to drive to the car. Curvature alone (limited to 0.02 m^-1)
-        # can actuate the steering for a large portion of any lateral movements. However, in order to get further control on
-        # steer actuation, the other three signals are necessary. Ford controls vehicles differently than most other makes.
-        # A detailed explanation on ford control can be found here:
-        # https://www.f150gen14.com/forum/threads/introducing-bluepilot-a-ford-specific-fork-for-comma3x-openpilot.24241/#post-457706
-        mode = 1 if CC.latActive else 0
-        counter = (self.frame // CarControllerParams.STEER_STEP) % 0x10
-        can_sends.append(fordcan.create_lat_ctl2_msg(self.packer, self.CAN, mode, 0., 0., -self.apply_curvature_last, 0., counter))
+        if self.CP.flags & FordFlags.CANFD:
+          # TODO: extended mode
+          # Ford uses four individual signals to dictate how to drive to the car. Curvature alone (limited to 0.02 m^-1)
+          # can actuate the steering for a large portion of any lateral movements. However, in order to get further control on
+          # steer actuation, the other three signals are necessary. Ford controls vehicles differently than most other makes.
+          # A detailed explanation on ford control can be found here:
+          # https://www.f150gen14.com/forum/threads/introducing-bluepilot-a-ford-specific-fork-for-comma3x-openpilot.24241/#post-457706
+          mode = 1 if CC.latActive else 0
+          counter = (self.frame // CarControllerParams.STEER_STEP) % 0x10
+          can_sends.append(fordcan.create_lat_ctl2_msg(self.packer, self.CAN, mode, 0., 0., -self.apply_curvature_last, 0., counter))
+        else:
+          can_sends.append(fordcan.create_lat_ctl_msg(self.packer, self.CAN, CC.latActive, 0., 0., -self.apply_curvature_last, 0.))
       else:
-        can_sends.append(fordcan.create_lat_ctl_msg(self.packer, self.CAN, CC.latActive, 0., 0., -self.apply_curvature_last, 0.))
+        can_sends.extend(CarControllerExt.build_steer_can_sends(self, CC, CS, actuators))
 
     # send lka msg at 33Hz
     if (self.frame % CarControllerParams.LKA_STEP) == 0:
-      can_sends.append(fordcan.create_lka_msg(self.packer, self.CAN))
+      can_sends.append(CarControllerExt.build_lka_can_send(self, CC, hud_control))
 
     ### longitudinal control ###
     # send acc msg at 50Hz

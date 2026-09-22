@@ -11,6 +11,7 @@ from opendbc.car.bluepilot.ford.carcontroller_ext import CarControllerExt
 from opendbc.car.bluepilot.ford.lateral_angle_ext import LateralAngleExt
 from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt, _read_param
 from opendbc.car.bluepilot.ford.param_store import ParamStore
+from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP
 
 LongCtrlState = structs.CarControl.Actuators.LongControlState
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
@@ -52,6 +53,8 @@ class CarController(CarControllerBase, LateralCurvExt, LateralAngleExt, CarContr
     self.CAN = fordcan.CanBus(CP)
 
     self.disable_BP_lat_UI = False
+    # BluePilot: the panda only accepts 4-signal messages when this bit was set at init
+    self.bp_lateral_allowed = bool(CP_SP.safetyParam & FordSafetyFlagsSP.BP_LATERAL)
     self.apply_curvature_last = 0
     self.anti_overshoot_curvature_last = 0
     self.accel = 0.0
@@ -72,7 +75,9 @@ class CarController(CarControllerBase, LateralCurvExt, LateralAngleExt, CarContr
     params = ParamStore.from_cc_sp(CC_SP)
     LateralCurvExt.update_lateral_params(self, params)
     LateralAngleExt.update_angle_params(self, params)
-    self.disable_BP_lat_UI = _read_param(params, "disable_BP_lat_UI", bool, False)
+    # BluePilot: one flag for every BP consumer (LatCtl dispatch, LKA angle-mode bits, mode reporting):
+    # the UI toggle, and the panda bit that was set at init. No 4-signal traffic to a stock-configured panda.
+    self.disable_BP_lat_UI = _read_param(params, "disable_BP_lat_UI", bool, False) or not self.bp_lateral_allowed
 
     actuators = CC.actuators
     hud_control = CC.hudControl

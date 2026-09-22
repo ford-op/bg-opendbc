@@ -24,7 +24,7 @@
 #define FORD_PINION_GEOMETRY_ROWS 13U
 
 // shadow_curvature is packed at scale 1e-6 1/m; convert to the CAN units steer_angle_cmd_checks
-// expects, matching FORD_STEERING_LIMITS/FORD_CANFD_STEERING_LIMITS.angle_deg_to_can (50000, i.e.
+// expects, matching FORD_BP_STEERING_LIMITS/FORD_CANFD_STEERING_LIMITS.curvature_to_can (50000, i.e.
 // physical scale 2e-5): raw * 1e-6 * 50000 = raw * 0.05.
 
 // Reset latch duration: ~3.0 seconds at 20Hz
@@ -54,6 +54,7 @@
 // BluePilot: optional angle_meas source, measured curvature from the steering pinion angle
 // (PSCM) via the vehicle model, selected by the geometry index in current_safety_param_sp
 // bits 1-4. Default off = stock yaw-sourced angle_meas. See ford_init in modes/ford.h.
+extern bool ford_bp_lateral;
 extern bool ford_bp_pinion_curvature;
 extern const AngleSteeringParams *ford_bp_pinion_params;
 extern const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS];

@@ -3,7 +3,7 @@ import unittest
 from opendbc.car import structs
 from opendbc.car.bluepilot.ford.param_store import ParamStore
 from opendbc.car.bluepilot.ford.lateral_curv_ext import _read_param
-from opendbc.car.bluepilot.ford.values_ext import BP_LATERAL_PARAMS, BP_LATERAL_BOOL_PARAMS
+from opendbc.car.bluepilot.ford.values_ext import BP_LATERAL_PARAMS
 
 
 def _cc_sp(**kv):
@@ -22,13 +22,21 @@ class TestParamStore(unittest.TestCase):
     self.assertEqual(_read_param(ps, "custom_profile_curv", int, 0), 2)
     self.assertEqual(_read_param(ps, "LC_PID_gain_UI_curv", float, 1.0), 3.5)
 
-  def test_missing_key_falls_back_to_caller_default(self):
+  def test_unset_keys_behave_like_params(self):
     ps = ParamStore.from_cc_sp(_cc_sp())
-    self.assertTrue(_read_param(ps, "enable_human_turn_detection_curv", bool, True))
+    # Params.get_bool on an unset key is False, not the caller default (matters for
+    # enable_human_turn_detection_curv, whose caller default is True)
+    self.assertFalse(ps.get_bool("enable_human_turn_detection_curv"))
+    self.assertFalse(_read_param(ps, "enable_human_turn_detection_curv", bool, True))
+    # numeric: Params returned None -> cast failed -> caller default; here get() raises -> same
     self.assertEqual(_read_param(ps, "LC_PID_gain_UI_curv", float, 1.0), 1.0)
     self.assertIsNone(ps.get("FordLowSpeedFactor_ang", return_default=True))
-    with self.assertRaises(KeyError):
-      ps.get_bool("disable_BP_lat_UI")
+
+  def test_bool_wire_format(self):
+    ps = ParamStore.from_cc_sp(_cc_sp(a=b"1", b=b"0", c=b"True"))
+    self.assertTrue(ps.get_bool("a"))
+    self.assertFalse(ps.get_bool("b"))
+    self.assertFalse(ps.get_bool("c"))  # Params stores "1"/"0" only
 
   def test_angle_side_read_shape(self):
     # lateral_angle_ext decodes bytes itself and accepts str; either must parse
@@ -38,7 +46,7 @@ class TestParamStore(unittest.TestCase):
 
   def test_key_list_is_consistent(self):
     self.assertEqual(len(BP_LATERAL_PARAMS), len(set(BP_LATERAL_PARAMS)))
-    self.assertIn("disable_BP_lat_UI", BP_LATERAL_BOOL_PARAMS)
+    self.assertEqual(len(BP_LATERAL_PARAMS), 18)
 
 
 if __name__ == "__main__":

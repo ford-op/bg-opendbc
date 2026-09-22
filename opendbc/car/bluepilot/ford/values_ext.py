@@ -72,20 +72,17 @@ BP_ANGLE_LIMITS = AngleSteeringLimits(
 MODEL_T_IDXS = [10.0 * (i / 32) ** 2 for i in range(33)]
 
 
-# UI-tunable lateral params, published per frame by the fork in CarControlSP.params and read here
-# through ParamStore (param_store.py). Keys must match the fork's params_keys.h.
-BP_LATERAL_BOOL_PARAMS = (
+# UI-tunable lateral params, published by the fork in CarControlSP.params and read here through
+# ParamStore (param_store.py). Keys must match the fork's params_keys.h; values arrive as the
+# same "1"/"0" / str(number) text Params stores, and each caller casts them itself.
+BP_LATERAL_PARAMS = (
   "disable_BP_lat_UI",
   "enable_human_turn_detection_curv",
   "enable_lane_positioning_curv",
   "enable_lane_full_mode_curv",
   "enable_lane_positioning_ang",
-)
-BP_LATERAL_INT_PARAMS = (
   "FordPrefLateralControl",
   "custom_profile_curv",
-)
-BP_LATERAL_FLOAT_PARAMS = (
   "lane_change_factor_high_curv",
   "pc_blend_ratio_high_C_UI_curv",
   "pc_blend_ratio_low_C_UI_curv",
@@ -98,4 +95,3 @@ BP_LATERAL_FLOAT_PARAMS = (
   "custom_path_offset_ang",
   "lane_centering_strength_ang",
 )
-BP_LATERAL_PARAMS = BP_LATERAL_BOOL_PARAMS + BP_LATERAL_INT_PARAMS + BP_LATERAL_FLOAT_PARAMS

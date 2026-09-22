@@ -29,7 +29,7 @@ from opendbc.car.vehicle_model import VehicleModel
 from opendbc.car.ford.values import CarControllerParams, FordFlags
 from opendbc.car.bluepilot.ford.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, FordSafetyFlagsSP
 from opendbc.car.bluepilot.ford.human_turn import HumanTurnDetector
-from opendbc.car.bluepilot.ford.lateral_inputs import ModelView, VehicleParamsView
+from opendbc.car.bluepilot.ford.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
 from opendbc.car.bluepilot.ford.values_ext import MODEL_T_IDXS
 
 
@@ -274,9 +274,14 @@ class LateralCurvExt:
     return -CS.out.yawRate / max(CS.out.vEgoRaw, 0.1)
 
   def update_inputs(self, CC_SP):
-    """Take this frame's model / vehicle-parameter inputs from CC_SP and update the vehicle model."""
+    """Take this frame's model / vehicle-parameter inputs from CC_SP and update the vehicle model.
+
+    A frame is used only if it has the full modelV2 shape this code indexes into (33 path points,
+    both inner lane lines, 3+ probs/stds); anything else is ignored and the previous inputs are
+    kept, exactly as a stale SubMaster message was. That also makes fuzzed or partial CC_SP
+    safe: the producer's valid flag is necessary but not trusted on its own."""
     li = CC_SP.lateralInputs
-    if li.valid:
+    if li.valid and lateral_inputs_complete(li):
       self.model = ModelView(li)
       self.lp = VehicleParamsView(li)
       self.lateral_delay = li.lateralDelay

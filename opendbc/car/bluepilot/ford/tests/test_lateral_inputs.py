@@ -79,6 +79,21 @@ class TestLateralInputs(unittest.TestCase):
     self.assertAlmostEqual(MODEL_T_IDXS[16], 2.5)
     self.assertEqual(MODEL_T_IDXS[32], 10.0)
 
+  def test_short_arrays_are_ignored_even_if_valid(self):
+    # fuzzed / partial CC_SP: valid=True but arrays not the modelV2 shape -> frame ignored
+    ext = _Ext()
+    LateralCurvExt.update_inputs(ext, _cc_sp())
+    bad = _cc_sp()
+    bad.lateralInputs.laneLineLeftY = []
+    LateralCurvExt.update_inputs(ext, bad)
+    self.assertEqual(ext.model.laneLines[1].y[0], -1.8)  # previous inputs kept
+    empty = _cc_sp()
+    empty.lateralInputs.pathYawRate = [0.0] * 10
+    LateralCurvExt.update_inputs(_Ext(), empty)  # must not raise
+    fresh = _Ext()
+    LateralCurvExt.update_inputs(fresh, empty)
+    self.assertIsNone(fresh.model)
+
 
 if __name__ == "__main__":
   unittest.main()

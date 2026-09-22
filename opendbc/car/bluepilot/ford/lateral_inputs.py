@@ -4,6 +4,16 @@ code reads. The fork fills lateralInputs once per frame; nothing here touches me
 """
 from types import SimpleNamespace
 
+MODEL_PATH_POINTS = 33  # modelV2 orientationRate / position / laneLines length (ModelConstants.IDX_N)
+
+
+def lateral_inputs_complete(li) -> bool:
+  """True when every array the lateral indexes into has the shape modelV2 always provides."""
+  return (len(li.pathYawRate) == MODEL_PATH_POINTS and len(li.pathX) == MODEL_PATH_POINTS and len(li.pathY) == MODEL_PATH_POINTS
+          and len(li.laneLineLeftX) == MODEL_PATH_POINTS and len(li.laneLineLeftY) == MODEL_PATH_POINTS
+          and len(li.laneLineRightX) == MODEL_PATH_POINTS and len(li.laneLineRightY) == MODEL_PATH_POINTS
+          and len(li.laneLineProbs) >= 3 and len(li.laneLineStds) >= 3)
+
 
 class _LaneLine:
   def __init__(self, x, y):

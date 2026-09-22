@@ -141,7 +141,7 @@ class LeadData:
 # fork from modelV2 / vehicleParameters / lateralDelay so opendbc never subscribes to messaging.
 @auto_dataclass
 class LateralInputs:
-  valid: bool = auto_field()               # model and vehicle params have been seen at least once
+  valid: bool = auto_field()               # producer saw model + vehicle params and filled every field below
   pathYawRate: list[float] = auto_field()  # modelV2.orientationRate.z, 33 points over T_IDXS
   pathX: list[float] = auto_field()        # modelV2.position.x
   pathY: list[float] = auto_field()        # modelV2.position.y

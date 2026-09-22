@@ -101,6 +101,15 @@ def apply_ford_curvature_limits_ext(apply_curvature, apply_curvature_last, curre
   return apply_curvature, max_curvature, curvature_deviation_limited
 
 
+def _read_param(params, key, cast, default):
+  # These BluePilot keys aren't registered in openpilot's params_keys.h, and
+  # get()/get_bool() have no return_default of their own, so any lookup can raise.
+  try:
+    return params.get_bool(key) if cast is bool else cast(params.get(key))
+  except Exception:
+    return default
+
+
 class LateralCurvExt:
   """
   BluePilot lateral control extension for Ford vehicles.
@@ -222,17 +231,17 @@ class LateralCurvExt:
 
   def update_lateral_params(self, params):
     """Read lateral-related Params from the UI. Called each frame."""
-    self.enable_human_turn_detection_curv = params.get_bool("enable_human_turn_detection_curv")
-    self.lane_change_factor_high_curv = float(params.get("lane_change_factor_high_curv", return_default=True))
-    self.pc_blend_ratio_high_C_UI_curv = float(params.get("pc_blend_ratio_high_C_UI_curv", return_default=True))
-    self.pc_blend_ratio_low_C_UI_curv = float(params.get("pc_blend_ratio_low_C_UI_curv", return_default=True))
-    self.enable_lane_positioning_curv = params.get_bool("enable_lane_positioning_curv")
-    self.custom_path_offset_curv = float(params.get("custom_path_offset_curv", return_default=True))
-    self.enable_lane_full_mode_curv = params.get_bool("enable_lane_full_mode_curv")
-    self.custom_profile_curv = int(params.get("custom_profile_curv", return_default=True))
-    self.LC_PID_gain_UI_curv = float(params.get("LC_PID_gain_UI_curv", return_default=True))
+    self.enable_human_turn_detection_curv = _read_param(params, "enable_human_turn_detection_curv", bool, True)
+    self.lane_change_factor_high_curv = _read_param(params, "lane_change_factor_high_curv", float, 0.85)
+    self.pc_blend_ratio_high_C_UI_curv = _read_param(params, "pc_blend_ratio_high_C_UI_curv", float, 0.4)
+    self.pc_blend_ratio_low_C_UI_curv = _read_param(params, "pc_blend_ratio_low_C_UI_curv", float, 0.4)
+    self.enable_lane_positioning_curv = _read_param(params, "enable_lane_positioning_curv", bool, False)
+    self.custom_path_offset_curv = _read_param(params, "custom_path_offset_curv", float, 0.0)
+    self.enable_lane_full_mode_curv = _read_param(params, "enable_lane_full_mode_curv", bool, False)
+    self.custom_profile_curv = _read_param(params, "custom_profile_curv", int, 0)
+    self.LC_PID_gain_UI_curv = _read_param(params, "LC_PID_gain_UI_curv", float, 1.0)
 
-    self.primary_lateral_control = PrimaryLateralControl(params.get("FordPrefLateralControl", return_default=True) or 0)
+    self.primary_lateral_control = PrimaryLateralControl(_read_param(params, "FordPrefLateralControl", int, 0))
 
   def _ensure_lateral_curv_initialized(self, CP):
     # Compatibility shim for LateralAngleExt, which calls this as a lazy-init guard. In this

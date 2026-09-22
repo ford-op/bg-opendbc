@@ -10,7 +10,7 @@ from openpilot.common.params import Params
 # BluePilot: 4-signal lateral control extensions (curvature-primary and angle-primary)
 from opendbc.car.bluepilot.ford.carcontroller_ext import CarControllerExt
 from opendbc.car.bluepilot.ford.lateral_angle_ext import LateralAngleExt
-from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt
+from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt, _read_param
 
 LongCtrlState = structs.CarControl.Actuators.LongControlState
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
@@ -72,7 +72,7 @@ class CarController(CarControllerBase, LateralCurvExt, LateralAngleExt, CarContr
     LateralCurvExt.update_sm(self)
     LateralCurvExt.update_lateral_params(self, self.params)
     LateralAngleExt.update_angle_params(self, self.params)
-    self.disable_BP_lat_UI = self.params.get_bool("disable_BP_lat_UI")
+    self.disable_BP_lat_UI = _read_param(self.params, "disable_BP_lat_UI", bool, False)
 
     actuators = CC.actuators
     hud_control = CC.hudControl

@@ -142,6 +142,21 @@ typedef struct {
   const float curvature_error_min_speed; // min speed for the curvature error check [m/s]
   const int max_steer_power;             // max steer power if EPS supports it (0 disables)
   const bool inactive_curvature_is_zero; // true resets desired to 0 on violation, false resets to measured curvature
+
+  // BluePilot: explicit rate-of-change tables, mirrored from values_ext.py BP_ANGLE_LIMITS.
+  // Upstream derives the per-tick delta from the ISO lateral jerk limit alone, which is looser
+  // than Ford's EPS tolerates at low speed and tighter than it tolerates at high speed. Ford
+  // therefore keeps its measured tables; VW MEB leaves use_rate_lookup false (zero-initialised)
+  // and keeps upstream's ISO-only behavior unchanged.
+  const bool use_rate_lookup;
+  const struct lookup_t curvature_rate_up_lookup;
+  const struct lookup_t curvature_rate_down_lookup;
+  // Ford CAN (Q3) is NOT lateral-accel limited in safety -- the EPS already caps it, and applying
+  // the ISO cap here would clip commands the car accepts today. Ford CAN FD (Q4) has more torque
+  // available and IS limited. Upstream's curvature check applies the cap unconditionally; this
+  // flag restores the pre-sync per-bus distinction. Only consulted when use_rate_lookup is set.
+  const bool limit_lateral_acceleration;
+  // End BluePilot
 } CurvatureSteeringLimits;
 
 // parameters for lateral accel/jerk angle limiting using a simple vehicle model

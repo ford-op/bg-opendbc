@@ -1,0 +1,67 @@
+"""
+Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
+
+This file is part of sunnypilot and is licensed under the MIT License.
+See the LICENSE.md file in the root directory for more details.
+"""
+
+from opendbc.car.ford.values import CAR
+from opendbc.car.lateral import AngleSteeringLimits
+
+
+class FordSafetyFlagsSP:
+  """Sunnypilot-level safety flags for Ford.
+
+  Carried in CP_SP.safetyParam and delivered to the safety firmware as
+  current_safety_param_sp (the separate SP uint16, USB control 0xdf) -- NOT the main
+  safetyConfigs[].safetyParam. ford_init reads it with GET_FLAG(current_safety_param_sp,
+  ...), same pattern as Subaru STOP_AND_GO (subaru_common.h). Plain int constants, not
+  IntFlag: CP_SP.safetyParam must stay a plain int through capnp serialization in card.
+  """
+  STEER_ANGLE_CURVATURE = 1
+
+
+# Geometry-table index for the steering-angle curvature measurement, packed into
+# CP_SP.safetyParam bits 1-4 when STEER_ANGLE_CURVATURE is set. Must match the
+# ford_pinion_geometry table in bluepilot/safety/ford.h row for row.
+# Index 0 is reserved as invalid: the firmware treats flag-set-but-no-index as feature
+# off, so a half-configured param can never select the wrong geometry silently.
+# FORD_EDGE_MK2 is deliberately absent: ALT_STEER_ANGLE platforms read a RELATIVE pinion
+# angle (SteeringPinion_Data_Alt + learned offset) and lack the absolute measurement
+# this feature needs -- the toggle no-ops there and yaw behavior is kept.
+# Index 10 (FORD_MONDEO_MK5) is reserved but unmapped here: that platform exists in
+# BluePilot but not in this opendbc baseline. Indices stay aligned with the C table.
+FORD_PINION_GEOMETRY_SHIFT = 1
+FORD_PINION_GEOMETRY_INDEX = {
+  CAR.FORD_BRONCO_SPORT_MK1: 1,
+  CAR.FORD_ESCAPE_MK4: 2,
+  CAR.FORD_ESCAPE_MK4_5: 3,
+  CAR.FORD_EXPEDITION_MK4: 4,
+  CAR.FORD_EXPLORER_MK6: 5,
+  CAR.FORD_FOCUS_MK4: 6,
+  CAR.FORD_F_150_LIGHTNING_MK1: 7,
+  CAR.FORD_F_150_MK14: 8,
+  CAR.FORD_MAVERICK_MK1: 9,
+  CAR.FORD_MUSTANG_MACH_E_MK1: 11,
+  CAR.FORD_RANGER_MK2: 12,
+}
+
+
+# BluePilot: Max curvature for steering command (m^-1), from DBC file limits
+CURVATURE_MAX = 0.02
+
+# BluePilot: Curvature rate limits — 3-point breakpoints for smoother lateral control.
+# Upstream opendbc uses 2-point ([5, 25]) with more conservative values.
+# These allow higher rates at low speed for responsiveness, lower rates at mid-speed
+# for comfort, and very low rates at highway speed for stability.
+#
+# Control (Python) uses stricter windup than unwind so OP stays inside panda when apply_std
+# picks the wrong table vs steer_curvature_cmd_checks. Safety firmware uses looser symmetric
+# ROCs (former “down” table for both up/down) — see bluepilot/safety/ford.h FORD_LIMITS.
+_BP_ANGLE_RATE_UP = ([5, 16, 25], [0.0025, 0.0012, 0.00008])
+_BP_ANGLE_RATE_DOWN = ([5, 16, 25], [0.0025, 0.0014, 0.00018])
+BP_ANGLE_LIMITS = AngleSteeringLimits(
+  0.02,  # Max curvature for steering command, m^-1
+  _BP_ANGLE_RATE_UP,
+  _BP_ANGLE_RATE_DOWN,
+)

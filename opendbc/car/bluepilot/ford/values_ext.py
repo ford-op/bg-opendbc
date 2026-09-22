@@ -65,3 +65,8 @@ BP_ANGLE_LIMITS = AngleSteeringLimits(
   _BP_ANGLE_RATE_UP,
   _BP_ANGLE_RATE_DOWN,
 )
+
+
+# Mirror of openpilot's ModelConstants.T_IDXS (selfdrive/modeld/constants.py): the 33 prediction
+# times, t = 10 * (i / 32)^2. Kept here so the lateral code does not import openpilot.
+MODEL_T_IDXS = [10.0 * (i / 32) ** 2 for i in range(33)]

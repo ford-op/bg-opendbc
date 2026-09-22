@@ -67,9 +67,9 @@ class CarController(CarControllerBase, LateralCurvExt, LateralAngleExt, CarContr
   def update(self, CC, CC_SP, CS, now_nanos):
     can_sends = []
 
-    # BluePilot: update SubMaster (modelV2, vehicleParameters, selfdriveState, lateralDelay)
-    # and the vehicle model, then read the lateral params from the UI
-    LateralCurvExt.update_sm(self)
+    # BluePilot: take this frame's model / vehicle-parameter inputs from CC_SP, update the vehicle
+    # model, then read the lateral params from the UI
+    LateralCurvExt.update_inputs(self, CC_SP)
     LateralCurvExt.update_lateral_params(self, self.params)
     LateralAngleExt.update_angle_params(self, self.params)
     self.disable_BP_lat_UI = _read_param(self.params, "disable_BP_lat_UI", bool, False)

@@ -11,6 +11,7 @@ static const float AVERAGE_ROAD_ROLL = 0.06;  // ~3.4 degrees, 6% superelevation
 // below when CurvatureSteeringLimits.use_rate_lookup is set. Included here (after ISO_LATERAL_ACCEL
 // / EARTH_G / AVERAGE_ROAD_ROLL, which it also uses) rather than as a top-of-file include,
 // mirroring the modes/ford.h -> opendbc/safety/bluepilot/ford.h split.
+// cppcheck-suppress misra-c2012-20.1; needs ISO_LATERAL_ACCEL / EARTH_G / AVERAGE_ROAD_ROLL defined above
 #include "opendbc/safety/bluepilot/lateral.h"
 
 // check that commanded torque value isn't too far from measured

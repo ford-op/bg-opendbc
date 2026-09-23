@@ -131,9 +131,6 @@ static bool ford_get_quality_flag_valid(const CANPacket_t *msg) {
 }
 
 static const CurvatureSteeringLimits FORD_STEERING_LIMITS = FORD_LIMITS(false, 100);
-static const CurvatureSteeringLimits FORD_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
-static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS = FORD_LIMITS(true, 100);
-static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LIMITS(true, 150);
 
 
 // BluePilot: pinion-geometry table, reset latch, the PathAngle/PathOffset/curvature-rate limit
@@ -144,6 +141,7 @@ static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LI
 // ford_bp_shadow_curvature_raw, desired_path_angle_last, desired_path_offset_last,
 // desired_curvature_rate_last, reset_bypass_latch_counter), mirroring the mads.h /
 // mads_declarations.h split used by opendbc/safety/sunnypilot/.
+// cppcheck-suppress misra-c2012-20.1; needs the Ford constants defined above
 #include "opendbc/safety/bluepilot/ford.h"
 
 static void ford_rx_hook(const CANPacket_t *msg) {
@@ -225,6 +223,11 @@ static void ford_rx_hook(const CANPacket_t *msg) {
 }
 
 static bool ford_tx_hook(const CANPacket_t *msg) {
+  // BluePilot: only this hook reads these; FORD_STEERING_LIMITS stays file-scope for the rx hook
+  static const CurvatureSteeringLimits FORD_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
+  static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS = FORD_LIMITS(true, 100);
+  static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LIMITS(true, 150);
+
   const LongitudinalLimits FORD_LONG_LIMITS = {
     // acceleration cmd limits (used for brakes)
     // Signal: AccBrkTot_A_Rq
@@ -302,7 +305,8 @@ static bool ford_tx_hook(const CANPacket_t *msg) {
     // message being transmitted right now, same as curvature/path_angle elsewhere in this file --
     // no separate CAN ID, no RX round-trip.
     ford_bp_angle_mode_engaged = (msg->data[4] & 0x1U) != 0U;
-    ford_bp_shadow_curvature_raw = (int16_t)((msg->data[5] << 8) | msg->data[6]);
+    unsigned int shadow_curvature_raw = (msg->data[5] << 8) | msg->data[6];
+    ford_bp_shadow_curvature_raw = (int16_t)shadow_curvature_raw;
   }
 
   // Safety check for LateralMotionControl action
@@ -407,22 +411,17 @@ static safety_config ford_init(uint16_t param) {
     {FORD_Lane_Assist_Data1, 0, 8, .check_relay = true},  \
     {FORD_IPMA_Data, 0, 8, .check_relay = true},          \
 
-  // BluePilot: upstream put this array behind #ifdef ALLOW_DEBUG. Left ungated to match pre-sync,
-  // because ford_init selects it at RUNTIME via ford_longitudinal (see the safety_config block).
+#ifdef ALLOW_DEBUG
   static const CanMsg FORD_CANFD_LONG_TX_MSGS[] = {
     FORD_COMMON_TX_MSGS
     {FORD_ACCDATA, 0, 8, .check_relay = true},
     {FORD_LateralMotionControl2, 0, 8, .check_relay = true},
   };
+#endif
 
   static const CanMsg FORD_CANFD_STOCK_TX_MSGS[] = {
     FORD_COMMON_TX_MSGS
     {FORD_LateralMotionControl2, 0, 8, .check_relay = true},
-  };
-
-  static const CanMsg FORD_STOCK_TX_MSGS[] = {
-    FORD_COMMON_TX_MSGS
-    {FORD_LateralMotionControl, 0, 8, .check_relay = true},
   };
 
   static const CanMsg FORD_LONG_TX_MSGS[] = {
@@ -434,15 +433,18 @@ static safety_config ford_init(uint16_t param) {
   const uint16_t FORD_PARAM_CANFD = 2;
   const bool ford_canfd = GET_FLAG(param, FORD_PARAM_CANFD);
 
-  bool ford_longitudinal = false;
-
+  safety_config ret;
+  if (ford_canfd) {
+    ret = BUILD_SAFETY_CFG(ford_rx_checks, FORD_CANFD_STOCK_TX_MSGS);
 #ifdef ALLOW_DEBUG
-  const uint16_t FORD_PARAM_LONGITUDINAL = 1;
-  ford_longitudinal = GET_FLAG(param, FORD_PARAM_LONGITUDINAL);
+    const uint16_t FORD_PARAM_LONGITUDINAL = 1;
+    if (GET_FLAG(param, FORD_PARAM_LONGITUDINAL)) {
+      ret = BUILD_SAFETY_CFG(ford_rx_checks, FORD_CANFD_LONG_TX_MSGS);
+    }
 #endif
-
-  // Longitudinal is the default for CAN, and optional for CAN FD w/ ALLOW_DEBUG
-  // ford_longitudinal = !ford_canfd || ford_longitudinal;
+  } else {
+    ret = BUILD_SAFETY_CFG(ford_rx_checks, FORD_LONG_TX_MSGS);
+  }
 
   // BluePilot: steering-angle curvature measurement (bad-yaw-sensor workaround), read from
   // the sunnypilot SP safety param (current_safety_param_sp, delivered via USB 0xdf before
@@ -458,18 +460,6 @@ static safety_config ford_init(uint16_t param) {
   }
   ford_bp_pinion_curvature = pinion_enabled;
   ford_bp_pinion_params = pinion_enabled ? &ford_pinion_geometry[pinion_geometry_index] : &ford_pinion_geometry[0];
-
-  // BluePilot: upstream replaced this runtime selection with a compile-time #ifdef ALLOW_DEBUG
-  // gate. Not adopted -- BluePilot keeps the ford_longitudinal runtime path above so the CAN FD
-  // longitudinal TX set stays selectable without a special build, exactly as pre-sync.
-  safety_config ret;
-  if (ford_canfd) {
-    ret = ford_longitudinal ? BUILD_SAFETY_CFG(ford_rx_checks, FORD_CANFD_LONG_TX_MSGS) : \
-                              BUILD_SAFETY_CFG(ford_rx_checks, FORD_CANFD_STOCK_TX_MSGS);
-  } else {
-    ret = ford_longitudinal ? BUILD_SAFETY_CFG(ford_rx_checks, FORD_LONG_TX_MSGS) : \
-                              BUILD_SAFETY_CFG(ford_rx_checks, FORD_STOCK_TX_MSGS);
-  }
   if (ford_bp_pinion_curvature) {
     // Enforce 100Hz/counter/QF on the pinion message only when it is actually consumed.
     SET_RX_CHECKS(ford_rx_checks_pinion, ret);

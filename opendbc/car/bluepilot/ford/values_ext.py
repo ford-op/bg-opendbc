@@ -18,7 +18,14 @@ class FordSafetyFlagsSP:
   ...), same pattern as Subaru STOP_AND_GO (subaru_common.h). Plain int constants, not
   IntFlag: CP_SP.safetyParam must stay a plain int through capnp serialization in card.
   """
+  # Bit layout of the SP safety param (mirrored in ford_init, modes/ford.h; pinned by
+  # tests/test_safety_param_bits.py):
+  #   bit 0    STEER_ANGLE_CURVATURE (pinion-sourced curvature measurement)
+  #   bits 1-4 pinion geometry index (FORD_PINION_GEOMETRY_SHIFT / FORD_PINION_GEOMETRY_INDEX)
+  #   bit 5    BP_LATERAL: the panda runs the 4-signal checks (ford_lmc_checks) instead of
+  #            upstream's stock curvature-only checks. Clear = upstream safety, verbatim.
   STEER_ANGLE_CURVATURE = 1
+  BP_LATERAL = 1 << 5
 
 
 # Geometry-table index for the steering-angle curvature measurement, packed into

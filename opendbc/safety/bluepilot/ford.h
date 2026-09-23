@@ -11,6 +11,7 @@
 // Global Variables
 // ===============================
 
+bool ford_bp_lateral = false;  // SP safety-param bit 5: BP 4-signal lateral checks instead of stock
 bool ford_bp_pinion_curvature = false;
 const AngleSteeringParams *ford_bp_pinion_params = &ford_pinion_geometry[0];
 
@@ -188,7 +189,7 @@ static inline bool curvature_rate_cmd_checks(int desired_curvature_rate, bool st
 // frame with nothing driving it toward path_angle's own smooth ROC). This is a pure per-frame
 // proximity check: does this frame's steering intent make physical sense given where the car is.
 // BluePilot: enforce_angle_error is gone from the struct; the check is unconditional now because
-// the only caller passes FORD_STEERING_LIMITS(_PINION), both of which set it true pre-sync.
+// the only caller passes FORD_BP_STEERING_LIMITS(_PINION), both of which set it true pre-sync.
 static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_control_enabled,
                                                const CurvatureSteeringLimits limits) {
   bool violation = false;

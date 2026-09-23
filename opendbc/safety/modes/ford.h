@@ -130,7 +130,18 @@ static bool ford_get_quality_flag_valid(const CANPacket_t *msg) {
   .limit_lateral_acceleration = (limit_lateral_accel),                                           \
 }
 
-static const CurvatureSteeringLimits FORD_STEERING_LIMITS = FORD_LIMITS(false, 100);
+// BluePilot: FORD_STEERING_LIMITS below is upstream's, verbatim. It is what the panda enforces when
+// the BP_LATERAL safety-param bit is clear (stock curvature-only lateral). The BP limit sets built
+// from FORD_LIMITS above live in ford_tx_hook, their only reader, and apply only when the bit is set.
+
+static const CurvatureSteeringLimits FORD_STEERING_LIMITS = {
+  .max_curvature = 1000,              // 0.02 rad/m * curvature_to_can
+  .curvature_to_can = 50000,          // CAN units per rad/m
+  .frequency = 20,                    // Hz
+  .max_curvature_error = 100,         // 0.002 rad/m * curvature_to_can
+  .curvature_error_min_speed = 10.0,  // m/s
+  .max_steer_power = 0,               // disabled, Ford has no steed power signal
+};
 
 
 // BluePilot: pinion-geometry table, reset latch, the PathAngle/PathOffset/curvature-rate limit
@@ -223,8 +234,9 @@ static void ford_rx_hook(const CANPacket_t *msg) {
 }
 
 static bool ford_tx_hook(const CANPacket_t *msg) {
-  // BluePilot: only this hook reads these; FORD_STEERING_LIMITS stays file-scope for the rx hook
-  static const CurvatureSteeringLimits FORD_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
+  // BluePilot: only this hook reads these
+  static const CurvatureSteeringLimits FORD_BP_STEERING_LIMITS = FORD_LIMITS(false, 100);
+  static const CurvatureSteeringLimits FORD_BP_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
   static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS = FORD_LIMITS(true, 100);
   static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LIMITS(true, 150);
 
@@ -319,16 +331,25 @@ static bool ford_tx_hook(const CANPacket_t *msg) {
     unsigned int raw_path_offset = (msg->data[5] << 2) | (msg->data[6] >> 6);
     // unsigned int raw_ramp_type = (msg->data[6] >> 4) & 0x3U;
 
-    // Convert raw signals to signed values (physical = (raw * scale) - offset; see ford_lmc_checks
-    // in opendbc/safety/bluepilot/ford.h for the value-range and rate-of-change checks)
-    int desired_curvature = raw_curvature - FORD_INACTIVE_CURVATURE;
-    int desired_curvature_rate = raw_curvature_rate - FORD_INACTIVE_CURVATURE_RATE;
-    int desired_path_offset = raw_path_offset - FORD_INACTIVE_PATH_OFFSET;
-    int desired_path_angle = raw_path_angle - FORD_INACTIVE_PATH_ANGLE;
+    bool violation = false;
+    if (ford_bp_lateral) {
+      // BluePilot: 4-signal lateral. Signed CAN units (physical = raw * scale - offset); value-range
+      // and rate-of-change checks live in ford_lmc_checks (opendbc/safety/bluepilot/ford.h).
+      int desired_curvature = raw_curvature - FORD_INACTIVE_CURVATURE;
+      int desired_curvature_rate = raw_curvature_rate - FORD_INACTIVE_CURVATURE_RATE;
+      int desired_path_offset = raw_path_offset - FORD_INACTIVE_PATH_OFFSET;
+      int desired_path_angle = raw_path_angle - FORD_INACTIVE_PATH_ANGLE;
+      violation = ford_lmc_checks(desired_curvature, desired_curvature_rate, desired_path_offset, desired_path_angle,
+                                  steer_control_enabled, &FORD_BP_STEERING_LIMITS, &FORD_BP_STEERING_LIMITS_PINION,
+                                  &FORD_CURVATURE_RATE_LIMITS_CAN, "CAN Out");
+    } else {
+      // These signals are not yet tested with the current safety limits
+      violation = (raw_curvature_rate != FORD_INACTIVE_CURVATURE_RATE) || (raw_path_angle != FORD_INACTIVE_PATH_ANGLE) || (raw_path_offset != FORD_INACTIVE_PATH_OFFSET);
 
-    bool violation = ford_lmc_checks(desired_curvature, desired_curvature_rate, desired_path_offset, desired_path_angle,
-                                     steer_control_enabled, &FORD_STEERING_LIMITS, &FORD_STEERING_LIMITS_PINION,
-                                     &FORD_CURVATURE_RATE_LIMITS_CAN, "CAN Out");
+      // Check angle error and steer_control_enabled
+      int desired_curvature = raw_curvature - FORD_INACTIVE_CURVATURE;  // /FORD_STEERING_LIMITS.curvature_to_can to get real curvature
+      violation |= steer_curvature_cmd_checks(desired_curvature, 0, steer_control_enabled, FORD_STEERING_LIMITS);
+    }
 
     if (violation) {
       tx = false;
@@ -345,16 +366,24 @@ static bool ford_tx_hook(const CANPacket_t *msg) {
     unsigned int raw_path_offset = ((msg->data[4] & 0x3U) << 8) | msg->data[5];
     // unsigned int raw_ramp_type = (msg->data[0] >> 1) & 0x3U;  // Extract bits 1-2 from byte 0
 
-    // Convert raw signals to signed values (physical = (raw * scale) - offset; see ford_lmc_checks
-    // in opendbc/safety/bluepilot/ford.h for the value-range and rate-of-change checks)
-    int desired_curvature = raw_curvature - FORD_INACTIVE_CURVATURE;
-    int desired_curvature_rate = raw_curvature_rate - FORD_CANFD_INACTIVE_CURVATURE_RATE;
-    int desired_path_offset = raw_path_offset - FORD_INACTIVE_PATH_OFFSET;
-    int desired_path_angle = raw_path_angle - FORD_INACTIVE_PATH_ANGLE;
+    bool violation = false;
+    if (ford_bp_lateral) {
+      // BluePilot: 4-signal lateral, see the CAN block above.
+      int desired_curvature = raw_curvature - FORD_INACTIVE_CURVATURE;
+      int desired_curvature_rate = raw_curvature_rate - FORD_CANFD_INACTIVE_CURVATURE_RATE;
+      int desired_path_offset = raw_path_offset - FORD_INACTIVE_PATH_OFFSET;
+      int desired_path_angle = raw_path_angle - FORD_INACTIVE_PATH_ANGLE;
+      violation = ford_lmc_checks(desired_curvature, desired_curvature_rate, desired_path_offset, desired_path_angle,
+                                  steer_control_enabled, &FORD_CANFD_STEERING_LIMITS, &FORD_CANFD_STEERING_LIMITS_PINION,
+                                  &FORD_CURVATURE_RATE_LIMITS_CANFD, "CANFD Out");
+    } else {
+      // These signals are not yet tested with the current safety limits
+      violation = (raw_curvature_rate != FORD_CANFD_INACTIVE_CURVATURE_RATE) || (raw_path_angle != FORD_INACTIVE_PATH_ANGLE) || (raw_path_offset != FORD_INACTIVE_PATH_OFFSET);
 
-    bool violation = ford_lmc_checks(desired_curvature, desired_curvature_rate, desired_path_offset, desired_path_angle,
-                                     steer_control_enabled, &FORD_CANFD_STEERING_LIMITS, &FORD_CANFD_STEERING_LIMITS_PINION,
-                                     &FORD_CURVATURE_RATE_LIMITS_CANFD, "CANFD Out");
+      // Check angle error and steer_control_enabled
+      int desired_curvature = raw_curvature - FORD_INACTIVE_CURVATURE;  // /FORD_STEERING_LIMITS.curvature_to_can to get real curvature
+      violation |= steer_curvature_cmd_checks(desired_curvature, 0, steer_control_enabled, FORD_STEERING_LIMITS);
+    }
 
     if (violation) {
       tx = false;
@@ -452,8 +481,14 @@ static safety_config ford_init(uint16_t param) {
   // subaru_common.h). Bit 0 enables; bits 1-4 carry the platform geometry-table index.
   // A zero or out-of-range index disables the feature outright, so a half-configured param
   // can never select the wrong geometry: the stock yaw path is kept in that case.
+  // BluePilot: SP safety param bit layout -- bit 0 pinion-curvature enable, bits 1-4 pinion geometry
+  // index, bit 5 BP 4-signal lateral. Bit 5 clear = upstream's stock lateral safety, verbatim.
+  const uint16_t FORD_PARAM_SP_BP_LATERAL = 32;
+  ford_bp_lateral = GET_FLAG(current_safety_param_sp, FORD_PARAM_SP_BP_LATERAL);
   const uint16_t FORD_PARAM_SP_STEER_ANGLE_CURVATURE = 1;
-  bool pinion_enabled = GET_FLAG(current_safety_param_sp, FORD_PARAM_SP_STEER_ANGLE_CURVATURE);
+  // Pinion measurement is only valid with the BP checks: the stock error band (100) was tuned for the
+  // yaw source and the stock Python path clips against yaw-derived curvature.
+  bool pinion_enabled = ford_bp_lateral && GET_FLAG(current_safety_param_sp, FORD_PARAM_SP_STEER_ANGLE_CURVATURE);
   const uint16_t pinion_geometry_index = (current_safety_param_sp >> 1) & 0xFU;
   if ((pinion_geometry_index == 0U) || (pinion_geometry_index > FORD_PINION_GEOMETRY_COUNT)) {
     pinion_enabled = false;

@@ -5,12 +5,12 @@ from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, Bus, DT_CTRL, apply_hystere
 from opendbc.car.ford import fordcan
 from opendbc.car.ford.values import CarControllerParams, FordFlags, CAR
 from opendbc.car.interfaces import CarControllerBase, V_CRUISE_MAX
-from openpilot.common.params import Params
 
 # BluePilot: 4-signal lateral control extensions (curvature-primary and angle-primary)
 from opendbc.car.bluepilot.ford.carcontroller_ext import CarControllerExt
 from opendbc.car.bluepilot.ford.lateral_angle_ext import LateralAngleExt
 from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt, _read_param
+from opendbc.car.bluepilot.ford.param_store import ParamStore
 
 LongCtrlState = structs.CarControl.Actuators.LongControlState
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
@@ -48,7 +48,6 @@ class CarController(CarControllerBase, LateralCurvExt, LateralAngleExt, CarContr
     LateralCurvExt.__init__(self, CP, CP_SP)
     LateralAngleExt.__init__(self, CP, CP_SP)
 
-    self.params = Params()
     self.packer = CANPacker(dbc_names[Bus.pt])
     self.CAN = fordcan.CanBus(CP)
 
@@ -67,12 +66,13 @@ class CarController(CarControllerBase, LateralCurvExt, LateralAngleExt, CarContr
   def update(self, CC, CC_SP, CS, now_nanos):
     can_sends = []
 
-    # BluePilot: update SubMaster (modelV2, vehicleParameters, selfdriveState, lateralDelay)
-    # and the vehicle model, then read the lateral params from the UI
-    LateralCurvExt.update_sm(self)
-    LateralCurvExt.update_lateral_params(self, self.params)
-    LateralAngleExt.update_angle_params(self, self.params)
-    self.disable_BP_lat_UI = _read_param(self.params, "disable_BP_lat_UI", bool, False)
+    # BluePilot: take this frame's model / vehicle-parameter inputs and UI params from CC_SP
+    # (the fork fills both; opendbc reads nothing from openpilot directly)
+    LateralCurvExt.update_inputs(self, CC_SP)
+    params = ParamStore.from_cc_sp(CC_SP)
+    LateralCurvExt.update_lateral_params(self, params)
+    LateralAngleExt.update_angle_params(self, params)
+    self.disable_BP_lat_UI = _read_param(params, "disable_BP_lat_UI", bool, False)
 
     actuators = CC.actuators
     hud_control = CC.hudControl

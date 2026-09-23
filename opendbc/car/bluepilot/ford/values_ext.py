@@ -65,3 +65,33 @@ BP_ANGLE_LIMITS = AngleSteeringLimits(
   _BP_ANGLE_RATE_UP,
   _BP_ANGLE_RATE_DOWN,
 )
+
+
+# Mirror of openpilot's ModelConstants.T_IDXS (selfdrive/modeld/constants.py): the 33 prediction
+# times, t = 10 * (i / 32)^2. Kept here so the lateral code does not import openpilot.
+MODEL_T_IDXS = [10.0 * (i / 32) ** 2 for i in range(33)]
+
+
+# UI-tunable lateral params, published by the fork in CarControlSP.params and read here through
+# ParamStore (param_store.py). Keys must match the fork's params_keys.h; values arrive as the
+# same "1"/"0" / str(number) text Params stores, and each caller casts them itself.
+BP_LATERAL_PARAMS = (
+  "disable_BP_lat_UI",
+  "enable_human_turn_detection_curv",
+  "enable_lane_positioning_curv",
+  "enable_lane_full_mode_curv",
+  "enable_lane_positioning_ang",
+  "FordPrefLateralControl",
+  "custom_profile_curv",
+  "lane_change_factor_high_curv",
+  "pc_blend_ratio_high_C_UI_curv",
+  "pc_blend_ratio_low_C_UI_curv",
+  "custom_path_offset_curv",
+  "LC_PID_gain_UI_curv",
+  "FordLowSpeedFactor_ang",
+  "FordHighSpeedFactor_ang",
+  "FordHighSpeedDampening_ang",
+  "lane_change_factor_high_ang",
+  "custom_path_offset_ang",
+  "lane_centering_strength_ang",
+)

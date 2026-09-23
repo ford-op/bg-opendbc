@@ -137,6 +137,29 @@ class LeadData:
   aLeadDEPRECATED: float = auto_field()
 
 
+# BluePilot: per-frame model/vehicle inputs for the Ford 4-signal lateral control. Filled by the
+# fork from modelV2 / vehicleParameters / lateralDelay so opendbc never subscribes to messaging.
+@auto_dataclass
+class LateralInputs:
+  valid: bool = auto_field()               # producer saw model + vehicle params and filled every field below
+  pathYawRate: list[float] = auto_field()  # modelV2.orientationRate.z, 33 points over T_IDXS
+  pathX: list[float] = auto_field()        # modelV2.position.x
+  pathY: list[float] = auto_field()        # modelV2.position.y
+  laneLineLeftX: list[float] = auto_field()   # modelV2.laneLines[1]
+  laneLineLeftY: list[float] = auto_field()
+  laneLineRightX: list[float] = auto_field()  # modelV2.laneLines[2]
+  laneLineRightY: list[float] = auto_field()
+  laneLineProbs: list[float] = auto_field()   # 4 entries
+  laneLineStds: list[float] = auto_field()
+  laneChangeState: int = auto_field()      # modelV2.meta.laneChangeState
+  laneChangeDirection: int = auto_field()  # modelV2.meta.laneChangeDirection
+  steerRatio: float = auto_field()         # vehicleParameters
+  stiffnessFactor: float = auto_field()
+  roll: float = auto_field()
+  angleOffsetDeg: float = auto_field()
+  lateralDelay: float = auto_field()       # lateralDelay.lateralDelay
+
+
 @auto_dataclass
 class CarControlSP:
   mads: 'ModularAssistiveDrivingSystem' = field(default_factory=lambda: ModularAssistiveDrivingSystem())
@@ -144,6 +167,7 @@ class CarControlSP:
   leadOne: 'LeadData' = field(default_factory=lambda: LeadData())
   leadTwo: 'LeadData' = field(default_factory=lambda: LeadData())
   intelligentCruiseButtonManagement: 'IntelligentCruiseButtonManagement' = field(default_factory=lambda: IntelligentCruiseButtonManagement())
+  lateralInputs: 'LateralInputs' = field(default_factory=lambda: LateralInputs())  # BluePilot
 
   @auto_dataclass
   class Param:

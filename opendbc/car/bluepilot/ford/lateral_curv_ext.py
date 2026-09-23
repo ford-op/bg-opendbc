@@ -19,18 +19,18 @@ import math
 from collections import namedtuple, deque
 from enum import IntEnum
 
-import openpilot.cereal.messaging as messaging
 import numpy as np
 from numpy import clip, interp
 
-from openpilot.common.pid import PIDController
+from opendbc.car.common.pid import PIDController
 from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, DT_CTRL
 from opendbc.car.lateral import ISO_LATERAL_ACCEL, apply_std_steer_angle_limits
 from opendbc.car.vehicle_model import VehicleModel
 from opendbc.car.ford.values import CarControllerParams, FordFlags
 from opendbc.car.bluepilot.ford.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, FordSafetyFlagsSP
 from opendbc.car.bluepilot.ford.human_turn import HumanTurnDetector
-from openpilot.selfdrive.modeld.constants import ModelConstants
+from opendbc.car.bluepilot.ford.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
+from opendbc.car.bluepilot.ford.values_ext import MODEL_T_IDXS
 
 
 class PrimaryLateralControl(IntEnum):
@@ -102,8 +102,8 @@ def apply_ford_curvature_limits_ext(apply_curvature, apply_curvature_last, curre
 
 
 def _read_param(params, key, cast, default):
-  # These BluePilot keys aren't registered in openpilot's params_keys.h, and
-  # get()/get_bool() have no return_default of their own, so any lookup can raise.
+  # params is a ParamStore over CarControlSP.params: get() raises for a key the fork did not
+  # publish (never written on the device), so the caller default applies; get_bool() is False.
   try:
     return params.get_bool(key) if cast is bool else cast(params.get(key))
   except Exception:
@@ -120,13 +120,11 @@ class LateralCurvExt:
   """
 
   def __init__(self, CP, CP_SP):
-    # SubMaster for model data, live parameters, and selfdrive state
-    # liveDelay is consumed by LateralAngleExt (variable lookup time); harmless for curvature mode.
-    self.sm = messaging.SubMaster(['modelV2', 'vehicleParameters', 'selfdriveState', 'radarState', 'lateralDelay'])
+    # Model / vehicle-parameter inputs arrive per frame in CC_SP.lateralInputs (see update_inputs)
     self.VM = VehicleModel(CP)
     self.model = None
     self.lp = None
-    self.ss = None
+    self.lateral_delay = 0.0
 
     # Primary lateral control variable: consumed by CarController's lateral dispatch.
     self.primary_lateral_control = PrimaryLateralControl.curvature
@@ -275,16 +273,18 @@ class LateralCurvExt:
                                      CS.out.vEgoRaw, roll)
     return -CS.out.yawRate / max(CS.out.vEgoRaw, 0.1)
 
-  def update_sm(self):
-    """Update SubMaster and vehicle model. Called each frame before lateral/long update."""
-    self.sm.update(0)
+  def update_inputs(self, CC_SP):
+    """Take this frame's model / vehicle-parameter inputs from CC_SP and update the vehicle model.
 
-    if self.sm.updated['modelV2']:
-      self.model = self.sm['modelV2']
-    if self.sm.updated['vehicleParameters']:
-      self.lp = self.sm['vehicleParameters']
-    if self.sm.updated['selfdriveState']:
-      self.ss = self.sm['selfdriveState']
+    A frame is used only if it has the full modelV2 shape this code indexes into (33 path points,
+    both inner lane lines, 3+ probs/stds); anything else is ignored and the previous inputs are
+    kept, exactly as a stale SubMaster message was. That also makes fuzzed or partial CC_SP
+    safe: the producer's valid flag is necessary but not trusted on its own."""
+    li = CC_SP.lateralInputs
+    if li.valid and lateral_inputs_complete(li):
+      self.model = ModelView(li)
+      self.lp = VehicleParamsView(li)
+      self.lateral_delay = li.lateralDelay
 
     if self.lp is not None:
       x = max(self.lp.stiffnessFactor, 0.1)
@@ -334,9 +334,9 @@ class LateralCurvExt:
       desired_curvature = actuators.curvature
 
       # Extract predicted curvature from modelV2
-      if self.model is not None and len(self.model.orientation.x) >= 17:
+      if self.model is not None and len(self.model.orientationRate.z) >= 17:
         curvatures = np.array(self.model.orientationRate.z) / max(0.01, CS.out.vEgoRaw)
-        predicted_curvature = interp(self.curvature_lookup_time, ModelConstants.T_IDXS, curvatures)
+        predicted_curvature = interp(self.curvature_lookup_time, MODEL_T_IDXS, curvatures)
       else:
         predicted_curvature = 0.0
 
@@ -440,7 +440,7 @@ class LateralCurvExt:
 
       # Path offset: blend model position with laneline data
       if self.model is not None:
-        path_offset_position = interp(self.path_offset_lookup_time, ModelConstants.T_IDXS, self.model.position.y)
+        path_offset_position = interp(self.path_offset_lookup_time, MODEL_T_IDXS, self.model.position.y)
         path_offset_lanelines = (self.model.laneLines[1].y[0] + self.model.laneLines[2].y[0]) / 2
 
         # Laneline width tolerance (prevents jumps when lanes merge/diverge)

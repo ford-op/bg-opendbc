@@ -36,7 +36,8 @@ jobs:
     # Welcome comment
     - name: "First timers PR"
       uses: actions/first-interaction@v1
-      if: github.event.pull_request.head.repo.full_name != 'sunnypilot/opendbc'
+      # BluePilot: upstream's welcome comment, inert in forks
+      if: github.repository == 'sunnypilot/opendbc' && github.event.pull_request.head.repo.full_name != 'sunnypilot/opendbc'
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
         pr-message: |

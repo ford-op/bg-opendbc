@@ -7,9 +7,14 @@
 
 #include "opendbc/safety/declarations.h"
 
-// BluePilot: Ford safety debug -- printf in libsafety/safety.c only; no-op on panda (no libc printf)
-#ifndef FORD_SAFETY_DBG
-#define FORD_SAFETY_DBG(...) ((void)0)
+// BluePilot: Ford safety debug prints. Compile-time switch: build with -DFORD_BP_DEBUG (bench /
+// libsafety only) to turn every FORD_BP_DBG into a printf; otherwise it expands to nothing, so CI
+// coverage and mutation see no code and the panda build carries no runtime flag.
+#ifdef FORD_BP_DEBUG
+#include <stdio.h>
+#define FORD_BP_DBG(...) printf(__VA_ARGS__)
+#else
+#define FORD_BP_DBG(...) ((void)0)
 #endif
 
 // ===============================
@@ -77,9 +82,6 @@ extern int desired_curvature_rate_last;
 // curvature_rate_cmd_checks can trip.
 extern uint8_t reset_bypass_latch_counter;
 
-// BluePilot: debug flag -- gates FORD_SAFETY_DBG printf calls (libsafety/safety.c only; no-op on
-// panda).
-extern bool ford_bp_debug;
 
 // ===============================
 // Function Declarations

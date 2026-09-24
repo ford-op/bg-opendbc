@@ -35,7 +35,8 @@ def c_int(v) -> int:
 CURVATURE_TO_CAN = 50000.0          # FORD_LIMITS .curvature_to_can
 FORD_CURVATURE_MAX = 0.02           # rad/m, FORD_CURVATURE_MAX in ford_declarations.h
 MAX_CURVATURE_CAN = c_int(f32(FORD_CURVATURE_MAX) * f32(CURVATURE_TO_CAN))  # FORD_LIMITS .max_curvature, 1000
-MAX_CURVATURE_ERROR_CAN = 100       # FORD_LIMITS(_, 100); 150 with the pinion source
+MAX_CURVATURE_ERROR_CAN = 100       # FORD_LIMITS(_, 100)
+MAX_CURVATURE_ERROR_CAN_PINION = 150  # FORD_BP_STEERING_LIMITS_PINION / FORD_CANFD_STEERING_LIMITS_PINION
 CURVATURE_ERROR_MIN_SPEED = 10.0    # m/s
 VEHICLE_SPEED_FACTOR = 1000.0
 RATE_LOOKUP_X = (5., 16., 25.)                 # m/s, FORD_LIMITS curvature_rate_{up,down}_lookup
@@ -205,7 +206,7 @@ def pinion_geometry_table() -> dict[int, tuple[float, float, float]]:
   body = src[src.index("ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS] = {"):]
   body = body[:body.index("};")]
   matches = list(_GEOMETRY_ROW.finditer(body))
-  # every initialiser must parse (a row in a spelling the regex misses would otherwise vanish),
+  # every initializer must parse (a row in a spelling the regex misses would otherwise vanish),
   # the comment index must be the row's position, and the count must be the declared size
   assert len(matches) == body.count("{.slip_factor"), "a geometry row did not parse"
   rows = {}

@@ -169,9 +169,11 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     min or max, and only strictly above 10 m/s. Six samples at 9 m/s then one at 11: band on;
     the reverse: band off; a newest sample of exactly 10.0: band off."""
     meas_can = 200
-    out_of_band = meas_can + MAX_CURVATURE_ERROR_CAN + 2 + 60  # outside the band, inside the rate delta from 'last'
     last = meas_can + MAX_CURVATURE_ERROR_CAN  # inside the band, so only the band decides
     below, above, gate = CURVATURE_ERROR_MIN_SPEED - 1, CURVATURE_ERROR_MIN_SPEED + 1, CURVATURE_ERROR_MIN_SPEED
+    # outside the band (its edge is meas + band + 1), inside the rate delta from 'last' at the slowest window
+    out_of_band = last + self.model.rate_delta(below) // 2
+    self.assertGreater(out_of_band, meas_can + MAX_CURVATURE_ERROR_CAN + 1)
     for window, newest, expect_blocked in ((below, above, True), (above, below, False), (above, gate, False), (below, gate, False)):
       self.set_meas(meas_can / CURVATURE_TO_CAN, window)
       self.rx(self.stock._speed_msg(newest))
@@ -294,10 +296,10 @@ class TestFordBPLimitsCAN(TestFordBPLimitsCANFD):
 
   def test_lateral_accel_cap(self):
     """CAN: no cap. A curvature well above the CAN FD cap is accepted up to the 0.02 hard limit."""
-    self.set_meas(0.018, 25.0)
+    self.set_meas(MAX_CURVATURE_CAN / CURVATURE_TO_CAN, 25.0)
     v_min, _ = self.speeds()
-    self.assertLess(self.model.accel_cap(v_min), 900)  # the FD cap would bite here
-    self.assertTrue(self._probe(900, 900))
+    self.assertLess(self.model.accel_cap(v_min), MAX_CURVATURE_CAN)  # the FD cap would bite here
+    self.assertTrue(self._probe(MAX_CURVATURE_CAN, MAX_CURVATURE_CAN))
 
 
 if __name__ == "__main__":

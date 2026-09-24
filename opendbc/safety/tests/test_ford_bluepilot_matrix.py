@@ -34,12 +34,14 @@ class BPLateralMatrixMixin:
 
   CANFD = True
   PARAM_SP = int(FordSafetyFlagsSP.BP_LATERAL)
-  MAX_CURVATURE_ERROR_CAN_BP = MAX_CURVATURE_ERROR_CAN  # FORD_LIMITS(_, 100); the pinion classes use 150
+  MAX_CURVATURE_ERROR_CAN_BP = MAX_CURVATURE_ERROR_CAN  # FORD_LIMITS(_, 100); the pinion classes use MAX_CURVATURE_ERROR_CAN_PINION
 
   def setUp(self):
     self.safety = test_ford.libsafety_py.libsafety
     self.safety.set_current_safety_param_sp(self.PARAM_SP)
     super().setUp()  # stock setUp: packer, set_safety_hooks, init_tests
+    # the angle-mode flag outlives ford_init; a plain Lane_Assist_Data1 frame clears it (byte 4 bit 0)
+    self._tx(self.packer.make_can_msg_safety("Lane_Assist_Data1", 0, {}))
     self.model = BPFordLateralModel(self.CANFD, self.MAX_CURVATURE_ERROR_CAN_BP)
 
   def tearDown(self):

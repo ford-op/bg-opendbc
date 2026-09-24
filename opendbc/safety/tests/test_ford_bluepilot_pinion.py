@@ -18,7 +18,9 @@ from opendbc.car.ford.values import CAR
 from opendbc.car.structs import CarParams
 from opendbc.car.vehicle_model import VehicleModel, calc_slip_factor
 from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT
-from opendbc.safety.tests.ford_bluepilot_common import CURVATURE_TO_CAN, CURVATURE_ERROR_MIN_SPEED, pinion_geometry_table
+from opendbc.safety.tests.ford_bluepilot_common import (
+  CURVATURE_TO_CAN, CURVATURE_ERROR_MIN_SPEED, MAX_CURVATURE_ERROR_CAN_PINION, pinion_geometry_table,
+)
 from opendbc.safety.tests import test_ford_bluepilot_matrix as matrix
 
 
@@ -33,7 +35,7 @@ class BPPinionMixin:
   """Pinion-angle measurement source. The geometry comes from the C table row for GEOMETRY_INDEX;
   TestFordBPPinionGeometryTable checks that row against CarSpecs."""
 
-  MAX_CURVATURE_ERROR_CAN_BP = 150  # FORD_BP_STEERING_LIMITS_PINION / FORD_CANFD_STEERING_LIMITS_PINION
+  MAX_CURVATURE_ERROR_CAN_BP = MAX_CURVATURE_ERROR_CAN_PINION
   GEOMETRY_INDEX = 0
   PINION_SLIP_FACTOR, PINION_STEER_RATIO, PINION_WHEELBASE = GEOMETRY[0]
   cnt_pinion = 0
@@ -53,7 +55,7 @@ class BPPinionMixin:
     return float(np.degrees(curvature * self.PINION_STEER_RATIO / self._curvature_factor(speed)))
 
   def _pinion_quant_tol(self, speed: float) -> int:
-    # 0.1 deg DBC quantisation in curvature CAN units at this speed, +2 for float rounding
+    # 0.1 deg DBC quantization in curvature CAN units at this speed, +2 for float rounding
     return int(np.radians(0.1) * self._curvature_factor(speed) / self.PINION_STEER_RATIO * CURVATURE_TO_CAN) + 2
 
   def _pinion_msg(self, curvature: float, speed: float, quality_flag=True):
@@ -97,7 +99,7 @@ class BPPinionMixin:
 
   def test_angle_measurements(self):
     """The rx hook converts pinion angle to curvature through the geometry row, within the
-    signal's 0.1 deg quantisation."""
+    signal's 0.1 deg quantization."""
     for speed in np.arange(0.5, 40, 0.5):
       for curvature in np.arange(0, 0.02 * 2, 2e-3):
         self._rx(self._speed_msg(speed))
@@ -185,7 +187,22 @@ class TestFordBPPinionGeometryTable(unittest.TestCase):
   """The C geometry table must match CarSpecs + calc_slip_factor(VehicleModel(CP)) for every
   platform in FORD_PINION_GEOMETRY_INDEX, so it cannot rot as platforms change."""
 
-  @unittest.expectedFailure  # #21: the FORD_F_150_MK14 row (3.99 m) no longer matches CarSpecs (3.69 m). Remove when the row is decided.
+  def _assert_row_matches_carspecs(self, car, idx):
+    specs = car.config.specs
+    CP = CarParams()
+    CP.mass = specs.mass
+    CP.wheelbase = specs.wheelbase
+    CP.steerRatio = specs.steerRatio
+    CP.centerToFront = specs.wheelbase * specs.centerToFrontRatio
+    CP.tireStiffnessFactor = specs.tireStiffnessFactor
+    CP.tireStiffnessFront, CP.tireStiffnessRear = scale_tire_stiffness(CP.mass, CP.wheelbase, CP.centerToFront, CP.tireStiffnessFactor)
+    slip_factor = calc_slip_factor(VehicleModel(CP))
+
+    slip, sr, wb = GEOMETRY[idx]
+    self.assertAlmostEqual(sr, specs.steerRatio, places=3, msg=str(car))
+    self.assertAlmostEqual(wb, specs.wheelbase, places=3, msg=str(car))
+    self.assertAlmostEqual(slip, slip_factor, delta=abs(slip_factor) * 1e-4, msg=str(car))
+
   def test_geometry_matches_carspecs(self):
     rows = GEOMETRY
     # the index rides bits 1-4 of current_safety_param_sp; growing past 15 would silently
@@ -198,20 +215,12 @@ class TestFordBPPinionGeometryTable(unittest.TestCase):
     self.assertEqual(len(set(FORD_PINION_GEOMETRY_INDEX.values())), len(FORD_PINION_GEOMETRY_INDEX), "duplicate index")
 
     for car, idx in FORD_PINION_GEOMETRY_INDEX.items():
-      specs = car.config.specs
-      CP = CarParams()
-      CP.mass = specs.mass
-      CP.wheelbase = specs.wheelbase
-      CP.steerRatio = specs.steerRatio
-      CP.centerToFront = specs.wheelbase * specs.centerToFrontRatio
-      CP.tireStiffnessFactor = specs.tireStiffnessFactor
-      CP.tireStiffnessFront, CP.tireStiffnessRear = scale_tire_stiffness(CP.mass, CP.wheelbase, CP.centerToFront, CP.tireStiffnessFactor)
-      slip_factor = calc_slip_factor(VehicleModel(CP))
+      if car != CAR.FORD_F_150_MK14:  # asserted on its own below (#21)
+        self._assert_row_matches_carspecs(car, idx)
 
-      slip, sr, wb = rows[idx]
-      self.assertAlmostEqual(sr, specs.steerRatio, places=3, msg=str(car))
-      self.assertAlmostEqual(wb, specs.wheelbase, places=3, msg=str(car))
-      self.assertAlmostEqual(slip, slip_factor, delta=abs(slip_factor) * 1e-4, msg=str(car))
+  @unittest.expectedFailure  # #21: the row (3.99 m) no longer matches CarSpecs (3.69 m). Remove when the row is decided.
+  def test_f150_geometry_matches_carspecs(self):
+    self._assert_row_matches_carspecs(CAR.FORD_F_150_MK14, FORD_PINION_GEOMETRY_INDEX[CAR.FORD_F_150_MK14])
 
   def test_invalid_index_row_is_inert(self):
     self.assertEqual(GEOMETRY[0], (0.0, 1.0, 1.0))

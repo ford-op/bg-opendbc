@@ -86,7 +86,6 @@ extern int desired_curvature_rate_last;
 // curvature_rate_cmd_checks can trip.
 extern uint8_t reset_bypass_latch_counter;
 
-
 // ===============================
 // Function Declarations
 // ===============================

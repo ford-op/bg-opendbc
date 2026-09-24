@@ -49,7 +49,6 @@ int desired_curvature_rate_last = 0;
 
 uint8_t reset_bypass_latch_counter = 0;
 
-
 // Curvature-rate value-check scale, CAN vs CAN FD
 // cppcheck-suppress misra-c2012-8.9; read only by ford_tx_hook in modes/ford.h, kept beside its CAN/CAN FD sibling
 static const AngleSteeringLimits FORD_CURVATURE_RATE_LIMITS_CAN = {

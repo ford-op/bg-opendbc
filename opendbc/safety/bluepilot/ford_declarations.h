@@ -9,7 +9,11 @@
 
 // BluePilot: Ford safety debug prints. Compile-time switch: build with -DFORD_BP_DEBUG (bench /
 // libsafety only) to turn every FORD_BP_DBG into a printf; otherwise it expands to nothing, so CI
-// coverage and mutation see no code and the panda build carries no runtime flag.
+// coverage and mutation see no code and the panda build carries no runtime flag. The printf
+// branch is bench-only and is not part of the MISRA-checked configuration (test_misra.sh runs
+// without FORD_BP_DEBUG). To use it on the bench, compile libsafety with
+//   cc ... -DALLOW_DEBUG -DFORD_BP_DEBUG -I . -c opendbc/safety/tests/libsafety/safety.c
+// (the same flags opendbc/safety/tests/libsafety/libsafety_py.py uses, plus FORD_BP_DEBUG).
 #ifdef FORD_BP_DEBUG
 #include <stdio.h>
 #define FORD_BP_DBG(...) printf(__VA_ARGS__)

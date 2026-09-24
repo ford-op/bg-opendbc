@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+      # BluePilot: also run on merges into the integration branch
+      - bg-clean
   pull_request:
 
 jobs:

@@ -7,8 +7,8 @@ Not a test module (no test_ prefix). Provides:
     acceleration cap, computed with the same float32 arithmetic and rounding as the C, so the
     tests can assert exact CAN-unit boundaries on both x86 and ARM runners.
   * BPFordTestCase: unittest base that borrows upstream's Ford test class for its message
-    builders (composition, so upstream's tests are not inherited), sets the BP_LATERAL safety
-    param bit before ford_init, and drains the reset-bypass latch.
+    builders (composition, so upstream's tests are not inherited) and sets the BP_LATERAL safety
+    param bit before ford_init.
 """
 import re
 import unittest
@@ -70,10 +70,10 @@ CURVATURE_RATE_TO_CAN_CAN = 4000000.0     # FORD_CURVATURE_RATE_LIMITS_CAN
 CURVATURE_RATE_LOOKUP_X = (5., 15., 25.)
 CURVATURE_RATE_LOOKUP_Y = (0.05, 0.025, 0.01)
 
-RESET_BYPASS_LATCH_FRAMES = 60
 LATCTL_CURVATURE_SIGNAL_MAX = 0.02094  # rad/m, LatCtlCurv_No_Actl range [-0.02|0.02094] in the DBC
 CURVATURE_SIGNAL_MAX_CAN = c_int(f32(LATCTL_CURVATURE_SIGNAL_MAX) * f32(CURVATURE_TO_CAN))  # 1047: the packer cannot go further
-SMALL_ANGLE = 0.01                  # rad: a non-zero path_angle keeps curvature-only frames from arming the reset latch
+FORMER_LATCH_WINDOW_FRAMES = 70      # > the 60 frames the removed reset-bypass latch covered (#9)
+SMALL_ANGLE = 0.01                  # rad: a small non-zero path_angle; probes hold it constant, so its ROC never decides
 
 
 def c_interpolate(xs, ys, x) -> np.float32:
@@ -180,19 +180,6 @@ class BPFordLateralModel:
     return True
 
 
-def drain_reset_latch(stock, curvature_can: int = 1):
-  """The reset-bypass latch (#9) makes every check pass for 60 frames after a curvature==0 &&
-  path_angle==0 frame, and nothing in init resets it. Send >60 non-zero frames that violate
-  nothing so later 'expect block' assertions come from the checks, not the bypass. `stock` is any
-  test object with upstream's Ford builders (_lat_ctl_msg, _tx, _set_prev_desired_angle, safety).
-  Leaves controls_allowed set, so call it inside tests, not in setUp of the stock matrix."""
-  curvature = curvature_can / CURVATURE_TO_CAN
-  for _ in range(RESET_BYPASS_LATCH_FRAMES + 10):
-    stock._set_prev_desired_angle(curvature)
-    stock._tx(stock._lat_ctl_msg(True, 0, 0, curvature, 0))
-    stock.safety.set_controls_allowed(True)
-
-
 _NUM = r"[-+0-9.eE]+"
 _GEOMETRY_ROW = re.compile(rf"\{{\.slip_factor = (?P<slip>{_NUM})f, \.steer_ratio = (?P<sr>{_NUM})f, \.wheelbase = (?P<wb>{_NUM})f\}},\s*// (?P<idx>\d+):")
 
@@ -240,10 +227,7 @@ class BPFordTestCase(unittest.TestCase):
     self.safety.init_tests()
     self.safety.set_controls_allowed(True)
     self.model = BPFordLateralModel(self.CANFD)
-    # BP state that ford_init / init_tests do not reset: angle-mode flag and the reset latch
-    self.tx(self.lka_bp_status_msg(False, 0.0))
     self.set_meas(0, 15.0)
-    self.drain_latch()
 
   def tearDown(self):
     # stock classes in the same process must not inherit the bit
@@ -275,9 +259,6 @@ class BPFordTestCase(unittest.TestCase):
 
   def meas(self) -> tuple[int, int]:
     return int(self.safety.get_curvature_meas_min()), int(self.safety.get_curvature_meas_max())
-
-  def drain_latch(self, curvature_can: int = 1):
-    drain_reset_latch(self.stock, curvature_can)
 
   def lka_bp_status_msg(self, angle_mode_engaged: bool, shadow_curvature: float, action: int = 0):
     """Lane_Assist_Data1 with BluePilot's angle-mode side channel: bit 0 of byte 4 = angle mode

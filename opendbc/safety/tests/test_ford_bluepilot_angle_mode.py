@@ -11,7 +11,7 @@ against the yaw-measured curvature with the same error window as curvature mode
 import unittest
 
 from opendbc.safety.tests.ford_bluepilot_common import (
-  BPFordTestCase, SMALL_ANGLE, CURVATURE_TO_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_ERROR_MIN_SPEED,
+  BPFordTestCase, SMALL_ANGLE, FORMER_LATCH_WINDOW_FRAMES, CURVATURE_TO_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_ERROR_MIN_SPEED,
 )
 
 
@@ -69,13 +69,26 @@ class TestFordBPAngleModeCANFD(BPFordTestCase):
         self.assertTrue(self.tx(self.lat(True, 0, 0, curvature_can / CURVATURE_TO_CAN, 0)))
 
   def test_shadow_out_of_window_blocks_while_enabled(self):
-    """An out-of-window shadow value blocks the enabled frame. Whether steer_control_enabled gates
-    the shadow check cannot be observed today: a disabled frame must carry curvature 0 and
-    path_angle 0, which arms the reset latch and clears every violation on that frame (#9)."""
+    """An out-of-window shadow value blocks the enabled frame; the disabled all-zero frame (mode 0)
+    is not checked against it."""
     speed = CURVATURE_ERROR_MIN_SPEED + 5
     self.set_meas(0.005, speed)
     self.tx(self.lka_bp_status_msg(True, 0.02))
     self.assertFalse(self._angle_frame())
+    self.assertTrue(self.tx(self.lat(False, 0, 0, 0, 0)))
+
+  def test_mode0_frame_leaves_shadow_check_active(self):
+    """Angle mode's human-turn override sends mode 0 with every signal zero. The frames after it
+    are checked: an out-of-window shadow curvature blocks on every frame of the 60-frame window
+    the removed bypass latch used to cover (#9)."""
+    speed = CURVATURE_ERROR_MIN_SPEED + 5
+    self.set_meas(0.005, speed)
+    self.tx(self.lka_bp_status_msg(True, 0.005))
+    self.assertTrue(self.tx(self.lat(False, 0, 0, 0, 0)))
+    self.tx(self.lka_bp_status_msg(True, 0.02))
+    for frame in range(FORMER_LATCH_WINDOW_FRAMES):
+      with self.subTest(frame=frame):
+        self.assertFalse(self._angle_frame())
 
 
 class TestFordBPAngleModeCAN(TestFordBPAngleModeCANFD):

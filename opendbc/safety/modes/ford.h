@@ -144,13 +144,13 @@ static const CurvatureSteeringLimits FORD_STEERING_LIMITS = {
 };
 
 
-// BluePilot: pinion-geometry table, reset latch, the PathAngle/PathOffset/curvature-rate limit
+// BluePilot: pinion-geometry table, the PathAngle/PathOffset/curvature-rate limit
 // tables, the path_angle/path_offset/curvature_rate ROC checks, the shadow-curvature deviation
 // check, and ford_lmc_checks (the shared LateralMotionControl/LateralMotionControl2 command
 // checks) now live in opendbc/safety/bluepilot/ford.h, alongside the state they operate on
 // (ford_bp_pinion_curvature, ford_bp_pinion_params, ford_bp_angle_mode_engaged,
 // ford_bp_shadow_curvature_raw, desired_path_angle_last, desired_path_offset_last,
-// desired_curvature_rate_last, reset_bypass_latch_counter), mirroring the mads.h /
+// desired_curvature_rate_last), mirroring the mads.h /
 // mads_declarations.h split used by opendbc/safety/sunnypilot/.
 // cppcheck-suppress misra-c2012-20.1; needs the Ford constants defined above
 #include "opendbc/safety/bluepilot/ford.h"

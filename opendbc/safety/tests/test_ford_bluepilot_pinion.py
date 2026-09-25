@@ -131,8 +131,7 @@ class BPPinionMixin:
     curvature = 0.005  # well above the 150-unit band
     for sign in (1, -1):
       with self.subTest(sign=sign):
-        self._reset_curvature_measurement(sign * curvature, speed)
-        self._drain_latch()
+        self.safety.set_controls_allowed(True)
         self._reset_curvature_measurement(sign * curvature, speed)
         self._set_prev_desired_angle(sign * curvature)
         self.assertTrue(self._tx(self._lat_ctl_msg(True, 0, 0, sign * curvature, 0)))
@@ -140,7 +139,7 @@ class BPPinionMixin:
         self.assertFalse(self._tx(self._lat_ctl_msg(True, 0, 0, -sign * curvature, 0)))
 
   def test_pinion_check_inert_below_gate_speed(self):
-    self._drain_latch()
+    self.safety.set_controls_allowed(True)
     speed = CURVATURE_ERROR_MIN_SPEED - 2
     self._reset_curvature_measurement(0.005, speed)
     inverted = -0.005

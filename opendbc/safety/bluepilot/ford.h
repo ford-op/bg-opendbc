@@ -47,8 +47,6 @@ int desired_path_angle_last = 0;
 int desired_path_offset_last = 0;
 int desired_curvature_rate_last = 0;
 
-uint8_t reset_bypass_latch_counter = 0;
-
 // Curvature-rate value-check scale, CAN vs CAN FD
 // cppcheck-suppress misra-c2012-8.9; read only by ford_tx_hook in modes/ford.h, kept beside its CAN/CAN FD sibling
 static const AngleSteeringLimits FORD_CURVATURE_RATE_LIMITS_CAN = {
@@ -186,25 +184,6 @@ static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool
     violation = safety_max_limit_check(desired_curvature, highest_allowed, lowest_allowed);
   }
   return violation;
-}
-
-// BluePilot: shared reset latch for LateralMotionControl and LateralMotionControl2. Activates
-// when both curvature and path_angle are zero (reset/neutral state), returning true so the
-// caller can bypass its violation for this frame and for a short ramp period afterward -- this
-// allows smooth ramp-up after human turn detection without blocked messages.
-static inline bool ford_reset_bypass_latch_check(int desired_curvature, int desired_path_angle) {
-  bool bypass = false;
-  if ((desired_curvature == 0) && (desired_path_angle == 0)) {
-    // Reset detected, activate latch for ramp period
-    reset_bypass_latch_counter = FORD_RESET_BYPASS_LATCH_DURATION;
-    bypass = true;
-  } else if (reset_bypass_latch_counter > 0U) {
-    // Latch active, allow bypass during ramp-up period
-    reset_bypass_latch_counter--;
-    bypass = true;
-  } else {
-  }
-  return bypass;
 }
 
 // BluePilot: shared curvature/curvature_rate/path_offset/path_angle command checks for
@@ -346,11 +325,6 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
   // Check curvature rate rate of change limits
   violation |= curvature_rate_cmd_checks(desired_curvature_rate, steer_control_enabled, *curvature_rate_limits);
   FORD_BP_DBG("%s: 4. desired_curvature_rate violation: %d\n", dbg_prefix, (int)violation);
-
-  // Reset latch: see ford_reset_bypass_latch_check above
-  if (ford_reset_bypass_latch_check(desired_curvature, desired_path_angle)) {
-    violation = false;
-  }
 
   return violation;
 }

@@ -28,9 +28,9 @@ as ``lateral_curv_ext``, via the shared ``HumanTurnDetector``), lateral is force
 0, all-zero signals) instead of winding path_angle into a stale command the PSCM has to reconcile
 on release -- on the Mach-E's PSCM that reconciliation cost 2-3 s of dead time before control
 resumed. Mode 0 is panda-clean by construction: every ford.h check has a legitimate
-!steer_control_enabled branch, so no reset-bypass latch involvement. On release, path_angle ramps
-back in from zero through the soft ROC below (no jump seed) -- generous at human-turn speeds, and
-admitted by ford.h's path_angle ROC check (2% looser) without any bypass.
+!steer_control_enabled branch. On release, path_angle ramps back in from zero through the soft
+ROC below (no jump seed) -- generous at human-turn speeds, and admitted by ford.h's path_angle
+ROC check (2% looser).
 """
 import numpy as np
 from numpy import clip, interp
@@ -304,7 +304,7 @@ class LateralAngleExt:
     # curv-suffixed human-turn toggle belongs to curvature mode's reset strategy, and the Mach-E
     # PSCM re-engage stall this prevents is not something a user should be able to opt out of.
     # On release, no jump seed: path_angle_last is 0, so the normal flow below ramps the command
-    # back in through the soft ROC -- generous at human-turn speeds, no panda bypass involved.
+    # back in through the soft ROC -- generous at human-turn speeds.
     self.angle_human_turn_active = self.human_turn_detector.update(
       True, CS.out.steeringPressed, CS.out.steeringAngleDeg)
     if self.angle_human_turn_active:

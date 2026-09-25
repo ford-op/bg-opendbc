@@ -60,15 +60,14 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     bp_curvature_rate_lookup_check). Seen in the car: a 4-frame block at 26 mph with the driver
     steering harder than the command, sitting exactly on this window's edge (#12)."""
     # measured both signs, and last commands on both sides of zero, so both relaxed branches run
-    # with last commands of either sign. The C picks up/down deltas by that sign; with the two
-    # FORD_LIMITS tables identical that choice is unobservable (see #20), the model mirrors it anyway.
+    # with last commands of either sign. The C picks the up or down table by that sign, and the
+    # down table is 1% looser (#20), so each relaxed probe below uses the table the C picks.
     for meas_can in (200, -200, 600, -600):
       for speed in (8.0, 12.0, 16.0, 20.0):
         self.set_meas(meas_can / CURVATURE_TO_CAN, speed)
         v_min, v_max = self.speeds()
         m_min, m_max = self.meas()
         band_on = v_max > CURVATURE_ERROR_MIN_SPEED
-        relaxed = self.model.rate_delta_relaxed(v_max)
         delta = self.model.rate_delta(v_min)
         lowest_err = m_min - MAX_CURVATURE_ERROR_CAN - 1
         highest_err = m_max + MAX_CURVATURE_ERROR_CAN + 1
@@ -78,6 +77,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
         for last in (lowest_err - 150, 0, -1, 1):
           if last >= lowest_err:
             continue
+          relaxed = self.model.rate_delta_relaxed(v_max, up=last > 0)  # climbing: down table while last <= 0
           self._assert_matches_model(last, (last + relaxed - 1, last + relaxed, last + delta, last + delta + 1,
                                             last - 1, lowest_err))
           if band_on:
@@ -92,6 +92,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
         for last in (highest_err + 150, 0, -1, 1):
           if last <= highest_err:
             continue
+          relaxed = self.model.rate_delta_relaxed(v_max, up=last < 0)  # descending: down table while last >= 0
           self._assert_matches_model(last, (last - relaxed + 1, last - relaxed, last - delta, last - delta - 1,
                                             last + 1, highest_err))
           if band_on:

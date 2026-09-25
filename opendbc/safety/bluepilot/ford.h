@@ -18,8 +18,9 @@ const AngleSteeringParams *ford_bp_pinion_params = &ford_pinion_geometry[0];
 // BluePilot: per-platform geometry for pinion-angle -> curvature conversion (the optional
 // angle_meas source), selected by the 4-bit geometry index in current_safety_param_sp
 // bits 1-4. Row order and values must match FORD_PINION_GEOMETRY_INDEX in
-// opendbc/sunnypilot/car/ford/values_ext.py (enforced by test_ford.py's
-// geometry-consistency test against CarSpecs + calc_slip_factor(VehicleModel(CP))).
+// opendbc/car/bluepilot/ford/values_ext.py (enforced by test_ford_bluepilot_pinion.py's
+// geometry test against CarSpecs + calc_slip_factor(VehicleModel(CP)), with the wheelbase
+// overrides in FORD_PINION_WHEELBASE applied).
 // Index 0 is reserved as invalid; ford_init disables the feature outright on a zero or
 // out-of-range index so a half-configured param can never select the wrong geometry.
 // FORD_EDGE_MK2 (ALT_STEER_ANGLE: relative pinion angle + learned offset) is unsupported
@@ -33,7 +34,7 @@ const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS] = {
   {.slip_factor = -0.00055447339f, .steer_ratio = 16.8f, .wheelbase = 3.025f},    // 5: FORD_EXPLORER_MK6
   {.slip_factor = -0.00062121569f, .steer_ratio = 15.0f, .wheelbase = 2.700f},    // 6: FORD_FOCUS_MK4
   {.slip_factor = -0.00045331952f, .steer_ratio = 16.9f, .wheelbase = 3.700f},    // 7: FORD_F_150_LIGHTNING_MK1
-  {.slip_factor = -0.00042037149f, .steer_ratio = 17.0f, .wheelbase = 3.990f},    // 8: FORD_F_150_MK14
+  {.slip_factor = -0.00043679222f, .steer_ratio = 17.0f, .wheelbase = 3.840f},    // 8: FORD_F_150_MK14 (average wheelbase, #21)
   {.slip_factor = -0.00054528036f, .steer_ratio = 17.0f, .wheelbase = 3.076f},    // 9: FORD_MAVERICK_MK1
   {.slip_factor = -0.00058852001f, .steer_ratio = 14.8f, .wheelbase = 2.850f},    // 10: FORD_MONDEO_MK5
   {.slip_factor = -0.00056209187f, .steer_ratio = 17.0f, .wheelbase = 2.984f},    // 11: FORD_MUSTANG_MACH_E_MK1

@@ -106,7 +106,7 @@ def _read_param(params, key, cast, default):
   # publish, so the caller default applies, bools included (get_bool alone would read an
   # unpublished key as False). Each default must equal the fork's params_keys.h entry (#6).
   try:
-    raw = params.get(key)
+    raw = params.get(key)  # raises for an unpublished key, bools included
     return params.get_bool(key) if cast is bool else cast(raw)
   except Exception:
     return default

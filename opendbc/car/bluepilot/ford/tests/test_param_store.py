@@ -2,7 +2,7 @@ import unittest
 
 from opendbc.car import structs
 from opendbc.car.bluepilot.ford.param_store import ParamStore
-from opendbc.car.bluepilot.ford.lateral_curv_ext import _read_param
+from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt, _read_param
 from opendbc.car.bluepilot.ford.values_ext import BP_LATERAL_PARAMS
 
 
@@ -24,13 +24,23 @@ class TestParamStore(unittest.TestCase):
 
   def test_unset_keys_behave_like_params(self):
     ps = ParamStore.from_cc_sp(_cc_sp())
-    # Params.get_bool on an unset key is False, not the caller default (matters for
-    # enable_human_turn_detection_curv, whose caller default is True)
+    # ParamStore mirrors Params: an unset bool reads as False, get() raises, get(return_default=True) is None
     self.assertFalse(ps.get_bool("enable_human_turn_detection_curv"))
-    self.assertFalse(_read_param(ps, "enable_human_turn_detection_curv", bool, True))
-    # numeric: Params returned None -> cast failed -> caller default; here get() raises -> same
-    self.assertEqual(_read_param(ps, "LC_PID_gain_UI_curv", float, 1.0), 1.0)
     self.assertIsNone(ps.get("FordLowSpeedFactor_ang", return_default=True))
+    # _read_param gives the caller default for any key the fork did not publish, bools included
+    self.assertTrue(_read_param(ps, "enable_human_turn_detection_curv", bool, True))
+    self.assertEqual(_read_param(ps, "LC_PID_gain_UI_curv", float, 1.0), 1.0)
+
+  def test_empty_params_give_registry_defaults(self):
+    """#6: with nothing published, the lateral runs the defaults the settings UI shows
+    (params_keys.h in the fork): human-turn detection on, low-curvature PID gain 1.0."""
+    ext = type("Ext", (), {})()
+    LateralCurvExt.update_lateral_params(ext, ParamStore.from_cc_sp(_cc_sp()))
+    self.assertTrue(ext.enable_human_turn_detection_curv)
+    self.assertEqual(ext.LC_PID_gain_UI_curv, 1.0)
+    # a published value still wins
+    LateralCurvExt.update_lateral_params(ext, ParamStore.from_cc_sp(_cc_sp(enable_human_turn_detection_curv=b"0")))
+    self.assertFalse(ext.enable_human_turn_detection_curv)
 
   def test_bool_wire_format(self):
     ps = ParamStore.from_cc_sp(_cc_sp(a=b"1", b=b"0", c=b"True"))

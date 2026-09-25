@@ -194,6 +194,44 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     self.assertFalse(self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0)))
     self.safety.set_controls_allowed(True)
 
+  def test_init_resets_bp_state(self):
+    """ford_init clears the BP path_angle / path_offset last values and the angle-mode flag, the
+    way set_safety_hooks clears upstream's lateral state: after a re-init the first frame is
+    checked against 0, not against the previous session. (The curvature_rate last value is reset
+    too, but its ROC can never fire, so that is not observable; see #22.)"""
+    speed = CURVATURE_ERROR_MIN_SPEED + 5
+    for stale in ("path_angle", "path_offset", "angle_mode"):
+      with self.subTest(stale=stale):
+        self.set_meas(0, speed)
+        v_min, _ = self.speeds()
+        angle_delta = angle_roc_delta(PATH_ANGLE_LOOKUP_X, PATH_ANGLE_LOOKUP_Y, PATH_ANGLE_TO_CAN, v_min)
+        offset_delta = angle_roc_delta(PATH_OFFSET_LOOKUP_X, PATH_OFFSET_LOOKUP_Y, PATH_OFFSET_TO_CAN, v_min)
+        # leave the one piece of state 3 ROC steps away from 0 (or angle mode engaged, with a
+        # shadow value that fails the window), then re-init
+        for step in (1, 2, 3):
+          angle = step * angle_delta if stale == "path_angle" else 0
+          offset = step * offset_delta if stale == "path_offset" else 0
+          self.set_prev_curvature_can(self.TINY_CURVATURE_CAN)
+          self.assertTrue(self.tx(self.lat(True, offset / PATH_OFFSET_TO_CAN, angle / PATH_ANGLE_TO_CAN,
+                                           self.TINY_CURVATURE_CAN / CURVATURE_TO_CAN, 0)))
+        if stale == "angle_mode":
+          self.tx(self.lka_bp_status_msg(True, 0.02))
+        self.reinit()
+        self.safety.set_controls_allowed(True)
+        self.set_meas(0.005 if stale == "angle_mode" else 0, speed)
+        self.set_prev_curvature_can(self.TINY_CURVATURE_CAN)
+        if stale == "angle_mode":
+          # the flag is cleared, so a curvature-0 frame is not checked against the shadow value
+          # (ford_init leaves the raw shadow value alone; the flag gates its use)
+          self.assertTrue(self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0)))
+        else:
+          # one full ROC step below 0: within the ROC only if the last value is exactly 0 (from the
+          # stale value it is 4 steps, from 1 it is one unit too many)
+          angle = -angle_delta if stale == "path_angle" else 0
+          offset = -offset_delta if stale == "path_offset" else 0
+          self.assertTrue(self.tx(self.lat(True, offset / PATH_OFFSET_TO_CAN, angle / PATH_ANGLE_TO_CAN,
+                                           self.TINY_CURVATURE_CAN / CURVATURE_TO_CAN, 0)))
+
   # --- the other three signals ---
 
   # the three non-curvature probes carry 1 CAN unit of curvature (measured 0, last 1) so a

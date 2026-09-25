@@ -499,6 +499,14 @@ static safety_config ford_init(uint16_t param) {
     // Enforce 100Hz/counter/QF on the pinion message only when it is actually consumed.
     SET_RX_CHECKS(ford_rx_checks_pinion, ret);
   }
+
+  // BluePilot: start from a clean BP lateral state, as set_safety_hooks does for upstream's
+  // (desired_angle_last etc.), so a re-init never checks against a previous session's commands.
+  // The angle-mode flag is set again by the next Lane_Assist_Data1 frame.
+  desired_path_angle_last = 0;
+  desired_path_offset_last = 0;
+  desired_curvature_rate_last = 0;
+  ford_bp_angle_mode_engaged = false;
   return ret;
 }
 

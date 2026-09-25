@@ -236,8 +236,7 @@ class BPFordTestCase(unittest.TestCase):
     self.stock.packer = CANPackerSafety("ford_lincoln_base_pt")
     self.stock.safety = libsafety_py.libsafety
     self.safety = self.stock.safety
-    self.safety.set_current_safety_param_sp(self.PARAM_SP)
-    self.safety.set_safety_hooks(CarParams.SafetyModel.ford, FordSafetyFlags.CANFD if self.CANFD else 0)
+    self.reinit()
     self.safety.init_tests()
     self.safety.set_controls_allowed(True)
     self.model = BPFordLateralModel(self.CANFD)
@@ -249,6 +248,11 @@ class BPFordTestCase(unittest.TestCase):
   def tearDown(self):
     # stock classes in the same process must not inherit the bit
     self.safety.set_current_safety_param_sp(0)
+
+  def reinit(self):
+    """A safety-mode init with the BP bit set (ford_init reads the bit)."""
+    self.safety.set_current_safety_param_sp(self.PARAM_SP)
+    self.safety.set_safety_hooks(CarParams.SafetyModel.ford, FordSafetyFlags.CANFD if self.CANFD else 0)
 
   # --- wrappers over upstream's builders ---
   def tx(self, msg) -> bool:

@@ -315,11 +315,20 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
   // it to keep desired_angle_last in sync, and path_angle keeps its own checks regardless. But
   // steer_curvature_cmd_checks also carries the controls_allowed gate; restore that piece
   // explicitly so a steer_control_enabled frame at curvature == 0 can't bypass it.
+  // The message-rate check (rt_curvature_rate_limit_check) is discarded with the rest, so mirror it
+  // here. Read the window before the call: the call counts this frame and may roll the window.
+  bool rt_violation = false;
+  if ((controls_allowed || controls_allowed_lateral) && steer_control_enabled) {
+    const int max_rt_msgs = ((float)limits->frequency * MAX_RT_INTERVAL / 1e6 * 1.2) + 1;  // as lateral.h
+    const uint32_t rt_msgs = curvature_state.rt_msgs + curvature_state.rt_msgs_prev;
+    rt_violation = (int)rt_msgs > max_rt_msgs;
+  }
   bool curvature_violation = steer_curvature_cmd_checks(desired_curvature, 0, steer_control_enabled, *limits);
   if (desired_curvature != 0) {
     violation |= curvature_violation;
   } else {
     violation |= steer_control_enabled && !(controls_allowed || controls_allowed_lateral);
+    violation |= rt_violation;
   }
   FORD_BP_DBG("%s: 1. desired_curvature violation: %d\n", dbg_prefix, (int)violation);
 

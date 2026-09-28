@@ -53,6 +53,15 @@ FORD_PINION_GEOMETRY_INDEX = {
   CAR.FORD_RANGER_MK2: 12,
 }
 
+# Pinion geometry wheelbase (m) where BluePilot deliberately differs from CarSpecs. Used by both the
+# C table (ford_pinion_geometry in safety/bluepilot/ford.h) and the Python pinion path
+# (lateral_curv_ext.pinion_vehicle_model), so the two layers convert pinion angle the same way.
+# FORD_F_150_MK14: the trucks with lane centering come in 3.68 and 3.99 m wheelbases and nothing on
+# the car tells them apart; the average keeps either within about 4% (#21).
+FORD_PINION_WHEELBASE = {
+  CAR.FORD_F_150_MK14: 3.84,
+}
+
 
 # BluePilot: Max curvature for steering command (m^-1), from DBC file limits
 CURVATURE_MAX = 0.02

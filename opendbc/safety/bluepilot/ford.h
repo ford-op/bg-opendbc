@@ -45,40 +45,8 @@ int16_t ford_bp_shadow_curvature_raw = 0;  // wire units, scale 1e-6 1/m (see fo
 
 int desired_path_angle_last = 0;
 int desired_path_offset_last = 0;
-int desired_curvature_rate_last = 0;
 
 uint8_t reset_bypass_latch_counter = 0;
-
-// Curvature-rate value-check scale, CAN vs CAN FD
-// cppcheck-suppress misra-c2012-8.9; read only by ford_tx_hook in modes/ford.h, kept beside its CAN/CAN FD sibling
-static const AngleSteeringLimits FORD_CURVATURE_RATE_LIMITS_CAN = {
-  .max_angle = 100,               // 1.0 meter in CAN units (100 * 0.01)
-  .angle_deg_to_can = 4000000,    // 1 / (1E-6) meter to can
-  .angle_rate_up_lookup = {
-    .x = {5., 15., 25.},
-    .y = {0.05, 0.025, 0.01}     // Slower rate limits for path offset
-  },
-  .angle_rate_down_lookup = {
-    .x = {5., 15., 25.},
-    .y = {0.05, 0.025, 0.01}     // Slower rate limits for path offset
-  },
-  .frequency = 20U,               // Hz - 20Hz message rate
-};
-
-// cppcheck-suppress misra-c2012-8.9; read only by ford_tx_hook in modes/ford.h, kept beside its CAN/CAN FD sibling
-static const AngleSteeringLimits FORD_CURVATURE_RATE_LIMITS_CANFD = {
-  .max_angle = 100,               // 1.0 meter in CAN units (100 * 0.01)
-  .angle_deg_to_can = 1000000,    // 1 / (1E-6) meter to can
-  .angle_rate_up_lookup = {
-    .x = {5., 15., 25.},
-    .y = {0.05, 0.025, 0.01}     // Slower rate limits for path offset
-  },
-  .angle_rate_down_lookup = {
-    .x = {5., 15., 25.},
-    .y = {0.05, 0.025, 0.01}     // Slower rate limits for path offset
-  },
-  .frequency = 20U,               // Hz - 20Hz message rate
-};
 
 // ===============================
 // Function Implementations
@@ -135,31 +103,6 @@ static inline bool path_offset_cmd_checks(int desired_path_offset, bool steer_co
   return violation;
 }
 
-static inline bool curvature_rate_cmd_checks(int desired_curvature_rate, bool steer_control_enabled, const AngleSteeringLimits limits) {
-  bool violation = false;
-
-  if (steer_control_enabled) {
-    float speed = ((float)vehicle_speed.min / VEHICLE_SPEED_FACTOR) - 1.;
-
-    int desired_curvature_rate_roc = (safety_interpolate(limits.angle_rate_up_lookup, speed) * limits.angle_deg_to_can) + 1.;
-
-    int highest_desired_curvature_rate = desired_curvature_rate_last + desired_curvature_rate_roc;
-    int lowest_desired_curvature_rate = desired_curvature_rate_last - desired_curvature_rate_roc;
-
-    violation |= safety_max_limit_check(desired_curvature_rate, highest_desired_curvature_rate, lowest_desired_curvature_rate);
-    FORD_BP_DBG("curvature_rate_cmd_checks 1: desired_curvature_rate: %d desired_curvature_rate_last: %d highest_desired_curvature_rate: %d lowest_desired_curvature_rate: %d violation: %d \n",
-                desired_curvature_rate, desired_curvature_rate_last, highest_desired_curvature_rate, lowest_desired_curvature_rate, (int)violation);
-  }
-  desired_curvature_rate_last = desired_curvature_rate;
-
-  if (!steer_control_enabled) {
-    violation |= (desired_curvature_rate != 0);
-  }
-  FORD_BP_DBG("curvature_rate_cmd_checks 2: violation: %d \n", (int)violation);
-
-  return violation;
-}
-
 // BluePilot: angle mode has no "current path_angle" measurement to check the command against,
 // unlike curvature mode, which compares desired_curvature against angle_meas (measured curvature,
 // from yaw rate). Without this, a large deviation between commanded path_angle and the car's ACTUAL
@@ -210,13 +153,12 @@ static inline bool ford_reset_bypass_latch_check(int desired_curvature, int desi
 // BluePilot: shared curvature/curvature_rate/path_offset/path_angle command checks for
 // LateralMotionControl (CAN) and LateralMotionControl2 (CAN FD) -- the two messages carry
 // identical signals at different bit offsets and CAN-unit scales, so the caller decodes the raw
-// signals and picks the right limit tables (curvature_rate_limits, and curvature_limits /
-// curvature_limits_pinion for the steer_curvature_cmd_checks + shadow-curvature call), and this
-// function does the rest. dbg_prefix labels the FORD_BP_DBG output ("CAN Out" / "CANFD Out").
+// signals and picks the right limit tables (curvature_limits / curvature_limits_pinion for the
+// steer_curvature_cmd_checks + shadow-curvature call), and this function does the rest.
+// dbg_prefix labels the FORD_BP_DBG output ("CAN Out" / "CANFD Out").
 static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
                             bool steer_control_enabled, const CurvatureSteeringLimits *curvature_limits,
-                            const CurvatureSteeringLimits *curvature_limits_pinion, const AngleSteeringLimits *curvature_rate_limits,
-                            const char *dbg_prefix) {
+                            const CurvatureSteeringLimits *curvature_limits_pinion, const char *dbg_prefix) {
   // dbg_prefix is only read inside FORD_BP_DBG, which expands to a no-op unless FORD_BP_DEBUG is defined for the
   // debug build, making the parameter otherwise unused.
   SAFETY_UNUSED(dbg_prefix);
@@ -279,12 +221,9 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
   FORD_BP_DBG("%s: desired_curvature: %d, curvature_min_can: %d, curvature_max_can: %d, violation: %d\n",
               dbg_prefix, desired_curvature, curvature_min_can, curvature_max_can, (int)violation);
 
-  // Check curvature rate value limits (CAN and CAN FD use different wire scales)
-  int curvature_rate_min_can = (int)(FORD_CURVATURE_RATE_MIN * curvature_rate_limits->angle_deg_to_can);
-  int curvature_rate_max_can = (int)(FORD_CURVATURE_RATE_MAX * curvature_rate_limits->angle_deg_to_can);
-  violation |= (desired_curvature_rate < curvature_rate_min_can) || (desired_curvature_rate > curvature_rate_max_can);
-  FORD_BP_DBG("%s: desired_curvature_rate: %d, curvature_rate_min_can: %d, curvature_rate_max_can: %d, violation: %d\n",
-              dbg_prefix, desired_curvature_rate, curvature_rate_min_can, curvature_rate_max_can, (int)violation);
+  // Curvature rate must be 0, like stock Ford: BluePilot always sends 0 (#22)
+  violation |= (desired_curvature_rate != 0);
+  FORD_BP_DBG("%s: desired_curvature_rate: %d, violation: %d\n", dbg_prefix, desired_curvature_rate, (int)violation);
 
   // Check path offset value limits
   int path_offset_min_can = (int)(FORD_PATH_OFFSET_MIN * FORD_PATH_OFFSET_LIMITS.angle_deg_to_can);
@@ -342,10 +281,6 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
   // Check path offset rate of change limits
   violation |= path_offset_cmd_checks(desired_path_offset, steer_control_enabled, FORD_PATH_OFFSET_LIMITS);
   FORD_BP_DBG("%s: 3. desired_path_offset violation: %d\n", dbg_prefix, (int)violation);
-
-  // Check curvature rate rate of change limits
-  violation |= curvature_rate_cmd_checks(desired_curvature_rate, steer_control_enabled, *curvature_rate_limits);
-  FORD_BP_DBG("%s: 4. desired_curvature_rate violation: %d\n", dbg_prefix, (int)violation);
 
   // Reset latch: see ford_reset_bypass_latch_check above
   if (ford_reset_bypass_latch_check(desired_curvature, desired_path_angle)) {

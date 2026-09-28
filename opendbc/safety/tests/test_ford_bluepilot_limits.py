@@ -15,8 +15,7 @@ from opendbc.safety.tests.ford_bluepilot_common import (
   PATH_ANGLE_TO_CAN, PATH_ANGLE_MAX_CAN, PATH_ANGLE_DBC_MIN_CAN, PATH_ANGLE_DBC_MAX_CAN,
   PATH_ANGLE_LOOKUP_X, PATH_ANGLE_LOOKUP_Y,
   PATH_OFFSET_TO_CAN, PATH_OFFSET_MAX_CAN, PATH_OFFSET_LOOKUP_X, PATH_OFFSET_LOOKUP_Y,
-  CURVATURE_RATE_MAX, CURVATURE_RATE_MIN, CURVATURE_RATE_TO_CAN_CANFD, CURVATURE_RATE_TO_CAN_CAN,
-  CURVATURE_RATE_LOOKUP_X, CURVATURE_RATE_LOOKUP_Y,
+  CURVATURE_RATE_TO_CAN_CANFD, CURVATURE_RATE_TO_CAN_CAN,
 )
 
 # speeds chosen to hit both sides of the error-band gate (10 m/s) and every segment of the
@@ -131,8 +130,8 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
       self.assertFalse(self._probe(sign * (MAX_CURVATURE_CAN + 1), sign * MAX_CURVATURE_CAN))
 
   def test_signals_zero_when_steer_disabled(self):
-    """With LatCtl_D2_Rq = 0 every signal must be zero (path_angle/path_offset/curvature_rate_cmd_checks
-    and steer_curvature_cmd_checks).
+    """With LatCtl_D2_Rq = 0 every signal must be zero (path_angle/path_offset_cmd_checks, the
+    curvature-rate check and steer_curvature_cmd_checks).
 
     A disabled frame with curvature 0 and path_angle 0 arms the reset latch and is bypassed
     whatever its offset or rate carry, so those two can only be asserted alongside a non-zero
@@ -271,21 +270,17 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     self.set_prev_curvature_can(self.TINY_CURVATURE_CAN)
     return self.tx(self.lat(True, 0, SMALL_ANGLE, self.TINY_CURVATURE_CAN / CURVATURE_TO_CAN, rate_can / self.RATE_TO_CAN))
 
-  def test_curvature_rate_range_and_roc(self):
-    """Curvature rate: the ROC table (curvature_rate_cmd_checks) allows tens of thousands of CAN
-    units per frame, far more than the signal can carry, so the whole DBC range is reachable in one
-    step; the value limits in ford_lmc_checks coincide with the signal's own range."""
-    self.set_meas(0, 12.0)
-    v_min, _ = self.speeds()
-    delta = angle_roc_delta(CURVATURE_RATE_LOOKUP_X, CURVATURE_RATE_LOOKUP_Y, self.RATE_TO_CAN, v_min)
-    top = int(CURVATURE_RATE_MAX * self.RATE_TO_CAN)
-    bottom = int(CURVATURE_RATE_MIN * self.RATE_TO_CAN)
-    self.assertGreater(delta, top - bottom)
-    self._rate_probe(0)
-    self.assertTrue(self._rate_probe(top))
-    self.assertTrue(self._rate_probe(bottom))
-    self.assertTrue(self._rate_probe(top // 2))
-    self._rate_probe(0)
+  def test_curvature_rate_must_be_zero(self):
+    """Curvature rate must be 0, the rule stock Ford applies (#22): one wire unit either way is
+    blocked at any speed. Curvature is non-zero so the frame can't arm the reset latch. A steer
+    disabled frame can't isolate this check while the latch exists: every other signal must be 0
+    for the rate to decide, and that frame arms the latch (see test_signals_zero_when_steer_disabled)."""
+    for speed in (3.0, 12.0, 30.0):
+      self.set_meas(0, speed)
+      for rate_can in (1, -1, 1023, -1024):
+        with self.subTest(speed=speed, rate_can=rate_can):
+          self.assertTrue(self._rate_probe(0))
+          self.assertFalse(self._rate_probe(rate_can))
 
 
 class TestFordBPLimitsCAN(TestFordBPLimitsCANFD):

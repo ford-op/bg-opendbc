@@ -144,13 +144,13 @@ static const CurvatureSteeringLimits FORD_STEERING_LIMITS = {
 };
 
 
-// BluePilot: pinion-geometry table, reset latch, the PathAngle/PathOffset/curvature-rate limit
-// tables, the path_angle/path_offset/curvature_rate ROC checks, the shadow-curvature deviation
+// BluePilot: pinion-geometry table, reset latch, the PathAngle/PathOffset limit
+// tables, the path_angle/path_offset ROC checks, the shadow-curvature deviation
 // check, and ford_lmc_checks (the shared LateralMotionControl/LateralMotionControl2 command
 // checks) now live in opendbc/safety/bluepilot/ford.h, alongside the state they operate on
 // (ford_bp_pinion_curvature, ford_bp_pinion_params, ford_bp_angle_mode_engaged,
 // ford_bp_shadow_curvature_raw, desired_path_angle_last, desired_path_offset_last,
-// desired_curvature_rate_last, reset_bypass_latch_counter), mirroring the mads.h /
+// reset_bypass_latch_counter), mirroring the mads.h /
 // mads_declarations.h split used by opendbc/safety/sunnypilot/.
 // cppcheck-suppress misra-c2012-20.1; needs the Ford constants defined above
 #include "opendbc/safety/bluepilot/ford.h"
@@ -340,8 +340,7 @@ static bool ford_tx_hook(const CANPacket_t *msg) {
       int desired_path_offset = raw_path_offset - FORD_INACTIVE_PATH_OFFSET;
       int desired_path_angle = raw_path_angle - FORD_INACTIVE_PATH_ANGLE;
       violation = ford_lmc_checks(desired_curvature, desired_curvature_rate, desired_path_offset, desired_path_angle,
-                                  steer_control_enabled, &FORD_BP_STEERING_LIMITS, &FORD_BP_STEERING_LIMITS_PINION,
-                                  &FORD_CURVATURE_RATE_LIMITS_CAN, "CAN Out");
+                                  steer_control_enabled, &FORD_BP_STEERING_LIMITS, &FORD_BP_STEERING_LIMITS_PINION, "CAN Out");
     } else {
       // These signals are not yet tested with the current safety limits
       violation = (raw_curvature_rate != FORD_INACTIVE_CURVATURE_RATE) || (raw_path_angle != FORD_INACTIVE_PATH_ANGLE) || (raw_path_offset != FORD_INACTIVE_PATH_OFFSET);
@@ -374,8 +373,7 @@ static bool ford_tx_hook(const CANPacket_t *msg) {
       int desired_path_offset = raw_path_offset - FORD_INACTIVE_PATH_OFFSET;
       int desired_path_angle = raw_path_angle - FORD_INACTIVE_PATH_ANGLE;
       violation = ford_lmc_checks(desired_curvature, desired_curvature_rate, desired_path_offset, desired_path_angle,
-                                  steer_control_enabled, &FORD_CANFD_STEERING_LIMITS, &FORD_CANFD_STEERING_LIMITS_PINION,
-                                  &FORD_CURVATURE_RATE_LIMITS_CANFD, "CANFD Out");
+                                  steer_control_enabled, &FORD_CANFD_STEERING_LIMITS, &FORD_CANFD_STEERING_LIMITS_PINION, "CANFD Out");
     } else {
       // These signals are not yet tested with the current safety limits
       violation = (raw_curvature_rate != FORD_CANFD_INACTIVE_CURVATURE_RATE) || (raw_path_angle != FORD_INACTIVE_PATH_ANGLE) || (raw_path_offset != FORD_INACTIVE_PATH_OFFSET);

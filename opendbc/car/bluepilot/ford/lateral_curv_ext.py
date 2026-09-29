@@ -119,9 +119,11 @@ def pinion_vehicle_model(CP):
 
 def _read_param(params, key, cast, default):
   # params is a ParamStore over CarControlSP.params: get() raises for a key the fork did not
-  # publish (never written on the device), so the caller default applies; get_bool() is False.
+  # publish, so the caller default applies, bools included (get_bool alone would read an
+  # unpublished key as False). Each default must equal the fork's params_keys.h entry (#6).
   try:
-    return params.get_bool(key) if cast is bool else cast(params.get(key))
+    raw = params.get(key)  # raises for an unpublished key, bools included
+    return params.get_bool(key) if cast is bool else cast(raw)
   except Exception:
     return default
 

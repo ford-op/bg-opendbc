@@ -2,13 +2,16 @@
 BluePilot: the UI params the fork publishes in CarControlSP.params, behind the two calls the
 lateral code already makes on openpilot's Params.
 
-Semantics match Params for a key the fork did not publish (i.e. never written on the device):
+Semantics match Params for a key the fork did not publish:
   get_bool(key)                    -> False   (Params: unset bool reads as False)
-  get(key)                         -> raises  (Params returned None; every caller casts and
-                                               falls back to its own default on the exception)
-  get(key, return_default=True)    -> None    (the fork publishes only keys that are set; the
-                                               angle-side callers keep their __init__ literals,
-                                               which equal the params_keys.h defaults)
+  get(key)                         -> raises  (every caller falls back to its own default)
+  get(key, return_default=True)    -> None    (the angle-side callers keep their __init__
+                                               literals)
+
+A fork with the #6 change publishes every lateral key, using the params_keys.h default for one
+never written on the device, so these paths are then only reached if the fork and the key list
+drift. An older fork publishes only keys that are set. Every caller default equals the
+params_keys.h default, so the result is the same either way.
 """
 
 

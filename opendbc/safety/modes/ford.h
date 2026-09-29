@@ -118,14 +118,14 @@ static bool ford_get_quality_flag_valid(const CANPacket_t *msg) {
   .inactive_curvature_is_zero = true,                                                            \
                                                                                                  \
   .use_rate_lookup = true,                                                                       \
-  /* Looser symmetric ROCs (former down table); Python control uses stricter up row in values_ext */ \
+  /* Down table 1% looser than up (#20); both >= the Python control's tables (values_ext) */     \
   .curvature_rate_up_lookup = {                                                                  \
     {5., 16., 25.},                                                                              \
     {0.0025f, 0.0014f, 0.00018f}                                                                 \
   },                                                                                             \
   .curvature_rate_down_lookup = {                                                                \
     {5., 16., 25.},                                                                              \
-    {0.0025f, 0.0014f, 0.00018f}                                                                 \
+    {0.002525f, 0.001414f, 0.0001818f}                                                           \
   },                                                                                             \
   .limit_lateral_acceleration = (limit_lateral_accel),                                           \
 }

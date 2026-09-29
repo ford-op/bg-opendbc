@@ -9,6 +9,8 @@ reset-bypass latch (#9) and disables every check for the next 60 frames.
 """
 import unittest
 
+import opendbc.safety.tests.common as common
+
 from opendbc.safety.tests.ford_bluepilot_common import (
   BPFordTestCase, angle_roc_delta, SMALL_ANGLE, CURVATURE_SIGNAL_MAX_CAN,
   CURVATURE_TO_CAN, MAX_CURVATURE_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_ERROR_MIN_SPEED,
@@ -288,6 +290,28 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     self.assertTrue(self._rate_probe(top // 2))
     self._rate_probe(0)
 
+  def test_curvature_zero_frames_are_rate_limited(self):
+    """#24: angle mode sends curvature 0 on every frame. Those frames are held to the same message-rate
+    window as the rest (upstream's rolling 250 ms window, split in two halves): sent faster than 20 Hz,
+    every frame past the limit is blocked until the window rolls over. Path angle carries the command,
+    so these frames never arm the reset latch."""
+    self.set_meas(0, 15.0)
+    max_rt_msgs = int(20 * common.RT_INTERVAL / 1e6 * 1.2 + 1)
+    half = common.RT_INTERVAL // 2
+
+    def send():
+      return self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0, increment_timer=False))
+
+    self.safety.set_timer(0)
+    for i in range(max_rt_msgs * 2):
+      self.assertEqual(i <= max_rt_msgs, send(), i)
+    self.safety.set_timer(half)
+    self.assertFalse(send())  # the overflow moves into the previous half
+    self.safety.set_timer(half + common.RT_INTERVAL)
+    self.assertFalse(send())
+    self.safety.set_timer(half + 2 * common.RT_INTERVAL)
+    for _ in range(max_rt_msgs):
+      self.assertTrue(send())
 
 class TestFordBPLimitsCAN(TestFordBPLimitsCANFD):
   """Same checks on the CAN (non-FD) LateralMotionControl message: no lateral-accel cap, and the

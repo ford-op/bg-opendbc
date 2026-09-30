@@ -10,10 +10,9 @@ stock assertions the 4-signal lateral changes on purpose are replaced:
     BluePilot equivalents are in test_ford_bluepilot_limits.py (every signal, exact boundaries).
   * test_max_lateral_acceleration: BluePilot caps at ISO_LATERAL_ACCEL - g*roll (~2.41 m/s^2)
     with a speed fudge, not upstream's ~3.6 m/s^2; CAN FD only.
-  * test_rt_limits: skipped, a known gap (#24). It sends curvature-0 frames, and with the bit set
-    the curvature-0 branch of ford_lmc_checks discards steer_curvature_cmd_checks' result, message-rate
-    check included, so those frames (all of angle mode) are never rate-limited.
-    test_rt_limits_nonzero_curvature pins the rate limit for curvature mode.
+  * test_rt_limits runs unchanged: it sends curvature-0 frames, which get the message-rate check in
+    ford_lmc_checks' curvature-0 branch (#24). test_rt_limits_nonzero_curvature pins it for
+    curvature mode.
 """
 import unittest
 
@@ -72,10 +71,6 @@ class BPLateralMatrixMixin:
           should_tx = abs(curvature_can) <= cap
           with self.subTest(speed=speed, curvature_can=curvature_can):
             self.assertEqual(should_tx, self._tx(self._lat_ctl_msg(True, 0, 0, curvature_can / CURVATURE_TO_CAN, 0)))
-
-  @unittest.skip("curvature-0 frames (all of angle mode) skip the message-rate check with the bit set, see #24")
-  def test_rt_limits(self):
-    pass
 
   def test_rt_limits_nonzero_curvature(self):
     """Upstream's rolling-window message-rate check, driven with a non-zero curvature (curvature mode)."""

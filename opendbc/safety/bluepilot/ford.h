@@ -47,7 +47,6 @@ int16_t ford_bp_shadow_curvature_raw = 0;  // wire units, scale 1e-6 1/m (see fo
 int desired_path_angle_last = 0;
 int desired_path_offset_last = 0;
 
-uint8_t reset_bypass_latch_counter = 0;
 
 // ===============================
 // Function Implementations
@@ -130,25 +129,6 @@ static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool
     violation = safety_max_limit_check(desired_curvature, highest_allowed, lowest_allowed);
   }
   return violation;
-}
-
-// BluePilot: shared reset latch for LateralMotionControl and LateralMotionControl2. Activates
-// when both curvature and path_angle are zero (reset/neutral state), returning true so the
-// caller can bypass its violation for this frame and for a short ramp period afterward -- this
-// allows smooth ramp-up after human turn detection without blocked messages.
-static inline bool ford_reset_bypass_latch_check(int desired_curvature, int desired_path_angle) {
-  bool bypass = false;
-  if ((desired_curvature == 0) && (desired_path_angle == 0)) {
-    // Reset detected, activate latch for ramp period
-    reset_bypass_latch_counter = FORD_RESET_BYPASS_LATCH_DURATION;
-    bypass = true;
-  } else if (reset_bypass_latch_counter > 0U) {
-    // Latch active, allow bypass during ramp-up period
-    reset_bypass_latch_counter--;
-    bypass = true;
-  } else {
-  }
-  return bypass;
 }
 
 // BluePilot: shared curvature/curvature_rate/path_offset/path_angle command checks for
@@ -255,11 +235,20 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
   // it to keep desired_angle_last in sync, and path_angle keeps its own checks regardless. But
   // steer_curvature_cmd_checks also carries the controls_allowed gate; restore that piece
   // explicitly so a steer_control_enabled frame at curvature == 0 can't bypass it.
+  // The message-rate check (rt_curvature_rate_limit_check) is discarded with the rest, so mirror it
+  // here. Read the window before the call: the call counts this frame and may roll the window.
+  bool rt_violation = false;
+  if ((controls_allowed || controls_allowed_lateral) && steer_control_enabled) {
+    const int max_rt_msgs = ((float)limits->frequency * MAX_RT_INTERVAL / 1e6 * 1.2) + 1;  // as lateral.h
+    const uint32_t rt_msgs = curvature_state.rt_msgs + curvature_state.rt_msgs_prev;
+    rt_violation = (int)rt_msgs > max_rt_msgs;
+  }
   bool curvature_violation = steer_curvature_cmd_checks(desired_curvature, 0, steer_control_enabled, *limits);
   if (desired_curvature != 0) {
     violation |= curvature_violation;
   } else {
     violation |= steer_control_enabled && !(controls_allowed || controls_allowed_lateral);
+    violation |= rt_violation;
   }
   FORD_BP_DBG("%s: 1. desired_curvature violation: %d\n", dbg_prefix, (int)violation);
 
@@ -283,10 +272,6 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
   violation |= path_offset_cmd_checks(desired_path_offset, steer_control_enabled, FORD_PATH_OFFSET_LIMITS);
   FORD_BP_DBG("%s: 3. desired_path_offset violation: %d\n", dbg_prefix, (int)violation);
 
-  // Reset latch: see ford_reset_bypass_latch_check above
-  if (ford_reset_bypass_latch_check(desired_curvature, desired_path_angle)) {
-    violation = false;
-  }
 
   return violation;
 }

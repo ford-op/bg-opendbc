@@ -3,14 +3,15 @@
 BluePilot Ford lateral: the 4-signal limits with the BP_LATERAL bit set.
 
 Every expectation comes from ford_bluepilot_common.BPFordLateralModel, a float32 mirror of the
-C, so boundaries are asserted at the exact CAN unit on both x86 and ARM. Frames never combine
-curvature == 0 with path_angle == 0 unless a test is about that, because that frame arms the
-reset-bypass latch (#9) and disables every check for the next 60 frames.
+C, so boundaries are asserted at the exact CAN unit on both x86 and ARM.
 """
+import random
 import unittest
 
+import opendbc.safety.tests.common as common
+
 from opendbc.safety.tests.ford_bluepilot_common import (
-  BPFordTestCase, angle_roc_delta, SMALL_ANGLE, CURVATURE_SIGNAL_MAX_CAN,
+  BPFordTestCase, angle_roc_delta, SMALL_ANGLE, FORMER_LATCH_WINDOW_FRAMES, CURVATURE_SIGNAL_MAX_CAN,
   CURVATURE_TO_CAN, MAX_CURVATURE_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_ERROR_MIN_SPEED,
   PATH_ANGLE_TO_CAN, PATH_ANGLE_MAX_CAN, PATH_ANGLE_DBC_MIN_CAN, PATH_ANGLE_DBC_MAX_CAN,
   PATH_ANGLE_LOOKUP_X, PATH_ANGLE_LOOKUP_Y,
@@ -34,7 +35,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     v_min, v_max = self.speeds()
     m_min, m_max = self.meas()
     for desired in probes:
-      if desired == 0 or abs(desired) > CURVATURE_SIGNAL_MAX_CAN:  # 0 would arm the latch
+      if desired == 0 or abs(desired) > CURVATURE_SIGNAL_MAX_CAN:  # 0 takes the curvature-0 branch, which the model does not mirror
         continue
       expected = self.model.allowed(desired, last_can, m_min, m_max, v_min, v_max, v_max)
       with self.subTest(speed=v_max, meas=(m_min, m_max), last=last_can, desired=desired):
@@ -132,19 +133,17 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
 
   def test_signals_zero_when_steer_disabled(self):
     """With LatCtl_D2_Rq = 0 every signal must be zero (path_angle/path_offset_cmd_checks, the
-    curvature-rate check and steer_curvature_cmd_checks).
-
-    A disabled frame with curvature 0 and path_angle 0 arms the reset latch and is bypassed
-    whatever its offset or rate carry, so those two can only be asserted alongside a non-zero
-    path_angle or curvature until #9 is decided; the lines still execute (coverage)."""
+    curvature-rate check and steer_curvature_cmd_checks), each on its own and in combination."""
     self.set_meas(0, 15.0)
+    self.assertFalse(self.tx(self.lat(False, 0.1, 0, 0, 0)))
+    self.assertFalse(self.tx(self.lat(False, 0, 0, 0, 0.0001)))
     self.assertFalse(self.tx(self.lat(False, 0, 0.01, 0, 0)))
     self.assertFalse(self.tx(self.lat(False, 0.1, 0.01, 0, 0)))
     self.assertFalse(self.tx(self.lat(False, 0, 0.01, 0, 0.0001)))
     self.assertFalse(self.tx(self.lat(False, 0, 0, 0.001, 0)))
     self.assertFalse(self.tx(self.lat(False, 0.1, 0, 0.001, 0)))
     self.assertFalse(self.tx(self.lat(False, 0, 0, 0.001, 0.0001)))
-    # the all-zero disabled frame is the one thing allowed (it also arms the latch, hence last)
+    # the all-zero disabled frame is the one thing allowed
     self.assertTrue(self.tx(self.lat(False, 0, 0, 0, 0)))
 
   def test_controls_not_allowed_blocks_steering(self):
@@ -194,10 +193,106 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     self.assertFalse(self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0)))
     self.safety.set_controls_allowed(True)
 
+  # --- the reset frame: curvature 0 and path_angle 0 (#9) ---
+
+  def test_reset_frame_accepted_mid_curve(self):
+    """Curvature mode's human-turn reset: steering enabled, curvature 0 and path_angle 0 while the
+    car is mid-curve. The curvature-0 branch skips the error band, so the frame is accepted; the
+    controller depends on this."""
+    self.set_meas(0.01, 20.0)  # measured 500 CAN: a real curvature command of 0 would be far outside the band
+    self.set_prev_curvature_can(500)
+    self.assertTrue(self.tx(self.lat(True, 0, 0, 0, 0)))
+
+  def test_reset_frame_then_jump_blocked(self):
+    """The repro in #9, steps A-C: at 25 m/s a jump from 0.001 to 0.02 rad/m is blocked (A); a
+    curvature 0 / path_angle 0 frame is accepted (B); the same jump right after it is still
+    blocked (C). With the latch, C passed."""
+    self.set_meas(0, 25.0)
+    jump, last = 0.02, int(0.001 * CURVATURE_TO_CAN)
+    self.set_prev_curvature_can(last)
+    self.assertFalse(self.tx(self.lat(True, 0, 0, jump, 0)))  # A
+    self.assertTrue(self.tx(self.lat(True, 0, 0, 0, 0)))  # B
+    self.set_prev_curvature_can(last)
+    self.assertFalse(self.tx(self.lat(True, 0, 0, jump, 0)))  # C
+
+  def _walk(self, reset_frame) -> list[bool]:
+    """Re-init, send reset_frame (if any), then a seeded random walk of curvature, path_angle and
+    path_offset steps up to 1.3 ROC steps each, so some frames pass and some are blocked by the
+    rate limits and the error band. Returns each frame's tx result. curvature_rate stays 0: its ROC
+    check can never fire (#22), so varying it would show nothing."""
+    self.reinit()
+    self.safety.set_controls_allowed(True)
+    self.set_meas(0, 12.0)  # band on around 0
+    if reset_frame is not None:
+      self.assertTrue(self.tx(reset_frame))
+    v_min, _ = self.speeds()
+    steps = (self.model.rate_delta(v_min),
+             angle_roc_delta(PATH_ANGLE_LOOKUP_X, PATH_ANGLE_LOOKUP_Y, PATH_ANGLE_TO_CAN, v_min),
+             angle_roc_delta(PATH_OFFSET_LOOKUP_X, PATH_OFFSET_LOOKUP_Y, PATH_OFFSET_TO_CAN, v_min))
+    bounds = (150, 300, 80)  # CAN units: past the band (101), inside the path_angle / path_offset ranges
+    rng = random.Random(9)
+    pos = [self.TINY_CURVATURE_CAN, 0, 0]
+    results = []
+    for _ in range(FORMER_LATCH_WINDOW_FRAMES):
+      pos = [max(-b, min(b, p + round(rng.uniform(-1.3, 1.3) * s))) for p, s, b in zip(pos, steps, bounds, strict=True)]
+      pos[0] = pos[0] or self.TINY_CURVATURE_CAN  # curvature 0 would take the curvature-0 branch
+      curvature, angle, offset = pos
+      results.append(self.tx(self.lat(True, offset / PATH_OFFSET_TO_CAN, angle / PATH_ANGLE_TO_CAN, curvature / CURVATURE_TO_CAN, 0)))
+    return results
+
+  def test_reset_frame_leaves_no_state(self):
+    """After a reset frame, enabled (curvature mode's human-turn reset) or disabled (angle mode's
+    mode 0), every check gives the same result, frame for frame, as without it, across the whole
+    window the removed bypass latch used to cover (#9)."""
+    baseline = self._walk(None)
+    self.assertTrue(any(baseline))  # some frames pass
+    self.assertFalse(all(baseline))  # and some are blocked
+    for enabled in (True, False):
+      with self.subTest(enabled=enabled):
+        self.assertEqual(baseline, self._walk(self.lat(enabled, 0, 0, 0, 0)))
+
+  def test_init_resets_bp_state(self):
+    """ford_init clears the BP path_angle / path_offset last values and the angle-mode flag, the
+    way set_safety_hooks clears upstream's lateral state: after a re-init the first frame is
+    checked against 0, not against the previous session. (The curvature_rate last value is reset
+    too, but its ROC can never fire, so that is not observable; see #22.)"""
+    speed = CURVATURE_ERROR_MIN_SPEED + 5
+    for stale in ("path_angle", "path_offset", "angle_mode"):
+      with self.subTest(stale=stale):
+        self.set_meas(0, speed)
+        v_min, _ = self.speeds()
+        angle_delta = angle_roc_delta(PATH_ANGLE_LOOKUP_X, PATH_ANGLE_LOOKUP_Y, PATH_ANGLE_TO_CAN, v_min)
+        offset_delta = angle_roc_delta(PATH_OFFSET_LOOKUP_X, PATH_OFFSET_LOOKUP_Y, PATH_OFFSET_TO_CAN, v_min)
+        # leave the one piece of state 3 ROC steps away from 0 (or angle mode engaged, with a
+        # shadow value that fails the window), then re-init
+        for step in (1, 2, 3):
+          angle = step * angle_delta if stale == "path_angle" else 0
+          offset = step * offset_delta if stale == "path_offset" else 0
+          self.set_prev_curvature_can(self.TINY_CURVATURE_CAN)
+          self.assertTrue(self.tx(self.lat(True, offset / PATH_OFFSET_TO_CAN, angle / PATH_ANGLE_TO_CAN,
+                                           self.TINY_CURVATURE_CAN / CURVATURE_TO_CAN, 0)))
+        if stale == "angle_mode":
+          self.tx(self.lka_bp_status_msg(True, 0.02))
+        self.reinit()
+        self.safety.set_controls_allowed(True)
+        self.set_meas(0.005 if stale == "angle_mode" else 0, speed)
+        self.set_prev_curvature_can(self.TINY_CURVATURE_CAN)
+        if stale == "angle_mode":
+          # the flag is cleared, so a curvature-0 frame is not checked against the shadow value
+          # (ford_init leaves the raw shadow value alone; the flag gates its use)
+          self.assertTrue(self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0)))
+        else:
+          # one full ROC step below 0: within the ROC only if the last value is exactly 0 (from the
+          # stale value it is 4 steps, from 1 it is one unit too many)
+          angle = -angle_delta if stale == "path_angle" else 0
+          offset = -offset_delta if stale == "path_offset" else 0
+          self.assertTrue(self.tx(self.lat(True, offset / PATH_OFFSET_TO_CAN, angle / PATH_ANGLE_TO_CAN,
+                                           self.TINY_CURVATURE_CAN / CURVATURE_TO_CAN, 0)))
+
   # --- the other three signals ---
 
-  # the three non-curvature probes carry 1 CAN unit of curvature (measured 0, last 1) so a
-  # path_angle of 0 never makes a zero/zero frame that would arm the latch
+  # the three non-curvature probes carry 1 CAN unit of curvature (measured 0, last 1), which
+  # passes the curvature checks, so only the signal under test decides
   TINY_CURVATURE_CAN = 1
 
   def _angle_probe(self, angle_can: int) -> bool:
@@ -273,16 +368,44 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
 
   def test_curvature_rate_must_be_zero(self):
     """Curvature rate must be 0, the rule stock Ford applies (#22): one wire unit either way is
-    blocked at any speed. Curvature is non-zero so the frame can't arm the reset latch. A steer
-    disabled frame can't isolate this check while the latch exists: every other signal must be 0
-    for the rate to decide, and that frame arms the latch (see test_signals_zero_when_steer_disabled)."""
+    blocked at any speed, steer enabled or disabled. The disabled frame carries only the rate, so
+    the rate check is the one deciding (the all-zero disabled frame passes)."""
     for speed in (3.0, 12.0, 30.0):
       self.set_meas(0, speed)
       for rate_can in (1, -1, 1023, -1024):
         with self.subTest(speed=speed, rate_can=rate_can):
           self.assertTrue(self._rate_probe(0))
           self.assertFalse(self._rate_probe(rate_can))
+    # disabled frames last: their path_angle of 0 would make the next enabled probe's path_angle step decide
+    for speed in (3.0, 12.0, 30.0):
+      self.set_meas(0, speed)
+      for rate_can in (1, -1, 1023, -1024):
+        with self.subTest(speed=speed, rate_can=rate_can, enabled=False):
+          self.assertTrue(self.tx(self.lat(False, 0, 0, 0, 0)))
+          self.assertFalse(self.tx(self.lat(False, 0, 0, 0, rate_can / self.RATE_TO_CAN)))
 
+  def test_curvature_zero_frames_are_rate_limited(self):
+    """#24: angle mode sends curvature 0 on every frame. Those frames are held to the same message-rate
+    window as the rest (upstream's rolling 250 ms window, split in two halves): sent faster than 20 Hz,
+    every frame past the limit is blocked until the window rolls over. Path angle carries the command,
+    so these frames never arm the reset latch."""
+    self.set_meas(0, 15.0)
+    max_rt_msgs = int(20 * common.RT_INTERVAL / 1e6 * 1.2 + 1)
+    half = common.RT_INTERVAL // 2
+
+    def send():
+      return self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0, increment_timer=False))
+
+    self.safety.set_timer(0)
+    for i in range(max_rt_msgs * 2):
+      self.assertEqual(i <= max_rt_msgs, send(), i)
+    self.safety.set_timer(half)
+    self.assertFalse(send())  # the overflow moves into the previous half
+    self.safety.set_timer(half + common.RT_INTERVAL)
+    self.assertFalse(send())
+    self.safety.set_timer(half + 2 * common.RT_INTERVAL)
+    for _ in range(max_rt_msgs):
+      self.assertTrue(send())
 
 class TestFordBPLimitsCAN(TestFordBPLimitsCANFD):
   """Same checks on the CAN (non-FD) LateralMotionControl message: no lateral-accel cap, and the

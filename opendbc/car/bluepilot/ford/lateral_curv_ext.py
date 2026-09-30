@@ -119,9 +119,11 @@ def pinion_vehicle_model(CP):
 
 def _read_param(params, key, cast, default):
   # params is a ParamStore over CarControlSP.params: get() raises for a key the fork did not
-  # publish (never written on the device), so the caller default applies; get_bool() is False.
+  # publish, so the caller default applies, bools included (get_bool alone would read an
+  # unpublished key as False). Each default must equal the fork's params_keys.h entry (#6).
   try:
-    return params.get_bool(key) if cast is bool else cast(params.get(key))
+    raw = params.get(key)  # raises for an unpublished key, bools included
+    return params.get_bool(key) if cast is bool else cast(raw)
   except Exception:
     return default
 
@@ -378,9 +380,9 @@ class LateralCurvExt:
       lateralUncertainty = self._calculate_lateral_uncertainty(requested_curvature, apply_curvature, max_curvature)
 
       # Human turn / standstill reset: after apply_ford_curvature_limits_ext (for torque-bar max_curvature),
-      # force κ=0 and (below) path_angle=0 on the bus. ford.h reset latch treats desired_curvature==0 &&
-      # desired_path_angle==0 as the neutral reset frame and clears rate violations for that TX, then
-      # holds ~3s bypass (see ford.h reset_bypass_latch_counter on LateralMotionControl / LateralMotionControl2).
+      # force κ=0 and (below) path_angle=0 on the bus. ford.h accepts that frame (curvature 0 skips the
+      # curvature checks), but checks the frames after it as usual: a ramp back that exceeds the rate
+      # limit or sits outside the curvature error band is blocked.
       if reset_steering == 1:
         apply_curvature = 0.0
         self.post_reset_ramp_active = False

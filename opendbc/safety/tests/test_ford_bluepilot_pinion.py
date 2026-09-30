@@ -17,7 +17,11 @@ from opendbc.car import scale_tire_stiffness
 from opendbc.car.ford.values import CAR
 from opendbc.car.structs import CarParams
 from opendbc.car.vehicle_model import VehicleModel, calc_slip_factor
-from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT
+from opendbc.car.bluepilot.ford.values_ext import (
+  FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, FORD_PINION_WHEELBASE,
+)
+from opendbc.car.bluepilot.ford.lateral_curv_ext import pinion_vehicle_model
+from opendbc.car.ford.interface import CarInterface
 from opendbc.safety.tests.ford_bluepilot_common import (
   CURVATURE_TO_CAN, CURVATURE_ERROR_MIN_SPEED, MAX_CURVATURE_ERROR_CAN_PINION, pinion_geometry_table,
 )
@@ -184,22 +188,25 @@ class TestFordBPPinionF150Safety(FordF150PinionGeometry, BPPinionMixin, matrix.T
 
 class TestFordBPPinionGeometryTable(unittest.TestCase):
   """The C geometry table must match CarSpecs + calc_slip_factor(VehicleModel(CP)) for every
-  platform in FORD_PINION_GEOMETRY_INDEX, so it cannot rot as platforms change."""
+  platform in FORD_PINION_GEOMETRY_INDEX, so it cannot rot as platforms change. Where BluePilot
+  deliberately uses another wheelbase (FORD_PINION_WHEELBASE), the row uses that one, and so does
+  the Python pinion path."""
 
   def _assert_row_matches_carspecs(self, car, idx):
     specs = car.config.specs
+    wheelbase = FORD_PINION_WHEELBASE.get(car, specs.wheelbase)
     CP = CarParams()
     CP.mass = specs.mass
-    CP.wheelbase = specs.wheelbase
+    CP.wheelbase = wheelbase
     CP.steerRatio = specs.steerRatio
-    CP.centerToFront = specs.wheelbase * specs.centerToFrontRatio
+    CP.centerToFront = wheelbase * specs.centerToFrontRatio
     CP.tireStiffnessFactor = specs.tireStiffnessFactor
     CP.tireStiffnessFront, CP.tireStiffnessRear = scale_tire_stiffness(CP.mass, CP.wheelbase, CP.centerToFront, CP.tireStiffnessFactor)
     slip_factor = calc_slip_factor(VehicleModel(CP))
 
     slip, sr, wb = GEOMETRY[idx]
     self.assertAlmostEqual(sr, specs.steerRatio, places=3, msg=str(car))
-    self.assertAlmostEqual(wb, specs.wheelbase, places=3, msg=str(car))
+    self.assertAlmostEqual(wb, wheelbase, places=3, msg=str(car))
     self.assertAlmostEqual(slip, slip_factor, delta=abs(slip_factor) * 1e-4, msg=str(car))
 
   def test_geometry_matches_carspecs(self):
@@ -214,12 +221,25 @@ class TestFordBPPinionGeometryTable(unittest.TestCase):
     self.assertEqual(len(set(FORD_PINION_GEOMETRY_INDEX.values())), len(FORD_PINION_GEOMETRY_INDEX), "duplicate index")
 
     for car, idx in FORD_PINION_GEOMETRY_INDEX.items():
-      if car != CAR.FORD_F_150_MK14:  # asserted on its own below (#21)
-        self._assert_row_matches_carspecs(car, idx)
+      self._assert_row_matches_carspecs(car, idx)
 
-  @unittest.expectedFailure  # #21: the row (3.99 m) no longer matches CarSpecs (3.69 m). Remove when the row is decided.
-  def test_f150_geometry_matches_carspecs(self):
-    self._assert_row_matches_carspecs(CAR.FORD_F_150_MK14, FORD_PINION_GEOMETRY_INDEX[CAR.FORD_F_150_MK14])
+  def test_f150_uses_the_average_wheelbase(self):
+    """#21: F-150s with lane centering come in 3.68 and 3.99 m wheelbases and nothing tells them
+    apart, so pinion mode uses the average on both sides: the C row and the Python model."""
+    self.assertEqual(FORD_PINION_WHEELBASE[CAR.FORD_F_150_MK14], 3.84)
+    self.assertAlmostEqual(GEOMETRY[FORD_PINION_GEOMETRY_INDEX[CAR.FORD_F_150_MK14]][2], 3.84, places=3)
+    CP = CarInterface.get_non_essential_params(CAR.FORD_F_150_MK14)
+    VM = pinion_vehicle_model(CP)
+    self.assertAlmostEqual(VM.l, 3.84, places=3)
+    self.assertAlmostEqual(VM.aF / VM.l, CP.centerToFront / CP.wheelbase, places=6)  # the platform's weight split is kept
+
+  def test_other_platforms_use_carspecs(self):
+    for car in FORD_PINION_GEOMETRY_INDEX:
+      if car in FORD_PINION_WHEELBASE:
+        continue
+      CP = CarInterface.get_non_essential_params(car)
+      with self.subTest(car=car):
+        self.assertAlmostEqual(pinion_vehicle_model(CP).l, CP.wheelbase, places=6)
 
   def test_invalid_index_row_is_inert(self):
     self.assertEqual(GEOMETRY[0], (0.0, 1.0, 1.0))

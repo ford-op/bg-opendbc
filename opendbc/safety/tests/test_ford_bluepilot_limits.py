@@ -8,6 +8,8 @@ C, so boundaries are asserted at the exact CAN unit on both x86 and ARM.
 import random
 import unittest
 
+import opendbc.safety.tests.common as common
+
 from opendbc.safety.tests.ford_bluepilot_common import (
   BPFordTestCase, angle_roc_delta, SMALL_ANGLE, FORMER_LATCH_WINDOW_FRAMES, CURVATURE_SIGNAL_MAX_CAN,
   CURVATURE_TO_CAN, MAX_CURVATURE_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_ERROR_MIN_SPEED,
@@ -59,15 +61,14 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     bp_curvature_rate_lookup_check). Seen in the car: a 4-frame block at 26 mph with the driver
     steering harder than the command, sitting exactly on this window's edge (#12)."""
     # measured both signs, and last commands on both sides of zero, so both relaxed branches run
-    # with last commands of either sign. The C picks up/down deltas by that sign; with the two
-    # FORD_LIMITS tables identical that choice is unobservable (see #20), the model mirrors it anyway.
+    # with last commands of either sign. The C picks the up or down table by that sign, and the
+    # down table is 1% looser (#20), so each relaxed probe below uses the table the C picks.
     for meas_can in (200, -200, 600, -600):
       for speed in (8.0, 12.0, 16.0, 20.0):
         self.set_meas(meas_can / CURVATURE_TO_CAN, speed)
         v_min, v_max = self.speeds()
         m_min, m_max = self.meas()
         band_on = v_max > CURVATURE_ERROR_MIN_SPEED
-        relaxed = self.model.rate_delta_relaxed(v_max)
         delta = self.model.rate_delta(v_min)
         lowest_err = m_min - MAX_CURVATURE_ERROR_CAN - 1
         highest_err = m_max + MAX_CURVATURE_ERROR_CAN + 1
@@ -77,6 +78,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
         for last in (lowest_err - 150, 0, -1, 1):
           if last >= lowest_err:
             continue
+          relaxed = self.model.rate_delta_relaxed(v_max, up=last > 0)  # climbing: down table while last <= 0
           self._assert_matches_model(last, (last + relaxed - 1, last + relaxed, last + delta, last + delta + 1,
                                             last - 1, lowest_err))
           if band_on:
@@ -91,6 +93,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
         for last in (highest_err + 150, 0, -1, 1):
           if last <= highest_err:
             continue
+          relaxed = self.model.rate_delta_relaxed(v_max, up=last < 0)  # descending: down table while last >= 0
           self._assert_matches_model(last, (last - relaxed + 1, last - relaxed, last - delta, last - delta - 1,
                                             last + 1, highest_err))
           if band_on:
@@ -380,6 +383,28 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     self.assertTrue(self._rate_probe(top // 2))
     self._rate_probe(0)
 
+  def test_curvature_zero_frames_are_rate_limited(self):
+    """#24: angle mode sends curvature 0 on every frame. Those frames are held to the same message-rate
+    window as the rest (upstream's rolling 250 ms window, split in two halves): sent faster than 20 Hz,
+    every frame past the limit is blocked until the window rolls over. Path angle carries the command,
+    so these frames never arm the reset latch."""
+    self.set_meas(0, 15.0)
+    max_rt_msgs = int(20 * common.RT_INTERVAL / 1e6 * 1.2 + 1)
+    half = common.RT_INTERVAL // 2
+
+    def send():
+      return self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0, increment_timer=False))
+
+    self.safety.set_timer(0)
+    for i in range(max_rt_msgs * 2):
+      self.assertEqual(i <= max_rt_msgs, send(), i)
+    self.safety.set_timer(half)
+    self.assertFalse(send())  # the overflow moves into the previous half
+    self.safety.set_timer(half + common.RT_INTERVAL)
+    self.assertFalse(send())
+    self.safety.set_timer(half + 2 * common.RT_INTERVAL)
+    for _ in range(max_rt_msgs):
+      self.assertTrue(send())
 
 class TestFordBPLimitsCAN(TestFordBPLimitsCANFD):
   """Same checks on the CAN (non-FD) LateralMotionControl message: no lateral-accel cap, and the

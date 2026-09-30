@@ -4,7 +4,7 @@ BluePilot: the BP_LATERAL safety-param bit selects which Ford lateral checks the
 
 This pins the switch itself, not the BluePilot limits: with the bit set a modest non-zero
 path_angle is accepted, and with it clear (upstream's stock checks) the same frame is rejected.
-The BluePilot limits and the reset latch are covered separately.
+The BluePilot limits are covered separately.
 """
 import unittest
 
@@ -38,12 +38,7 @@ class TestFordBPLateralBit(unittest.TestCase):
     h.safety.init_tests()
     h.safety.set_controls_allowed(True)
     h._reset_curvature_measurement(0, SPEED)
-    # drain the BP reset latch a previous test may have left live, so acceptance below comes
-    # from the checks themselves, not from the bypass
-    for _ in range(70):
-      h._set_prev_desired_angle(0.001)
-      h._tx(h._lat_ctl_msg(True, 0, 0, 0.001, 0))
-      h.safety.set_controls_allowed(True)
+    h._set_prev_desired_angle(0.001)
 
   def test_bit_set_runs_bluepilot_checks(self):
     self._init(FordSafetyFlagsSP.BP_LATERAL)

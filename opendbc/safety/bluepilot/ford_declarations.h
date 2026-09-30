@@ -36,9 +36,6 @@
 // expects, matching FORD_BP_STEERING_LIMITS/FORD_CANFD_STEERING_LIMITS.curvature_to_can (50000, i.e.
 // physical scale 2e-5): raw * 1e-6 * 50000 = raw * 0.05.
 
-// Reset latch duration: ~3.0 seconds at 20Hz
-#define FORD_RESET_BYPASS_LATCH_DURATION 60U
-
 // Control signal limits -- curvature magnitude must match MAX_CURVATURE; rate tables must match
 // opendbc/sunnypilot/car/ford/values_ext.py BP_ANGLE_LIMITS.
 #define FORD_CURVATURE_MIN -0.02f
@@ -79,13 +76,6 @@ extern int desired_path_angle_last;
 extern int desired_path_offset_last;
 extern int desired_curvature_rate_last;
 
-// BluePilot: reset latch state -- allows a bypass window after both curvature and path_angle
-// reset to 0, so ramp-up after human turn detection isn't blocked. See
-// ford_reset_bypass_latch_check. openpilot must send curvature_rate ~= 0 during reset and keep
-// apply_curvature_last aligned with the prior TX (see carcontroller BP path); else
-// curvature_rate_cmd_checks can trip.
-extern uint8_t reset_bypass_latch_counter;
-
 // ===============================
 // Function Declarations
 // ===============================
@@ -94,7 +84,6 @@ static inline bool path_angle_cmd_checks(int desired_path_angle, bool steer_cont
 static inline bool path_offset_cmd_checks(int desired_path_offset, bool steer_control_enabled, AngleSteeringLimits limits);
 static inline bool curvature_rate_cmd_checks(int desired_curvature_rate, bool steer_control_enabled, AngleSteeringLimits limits);
 static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_control_enabled, CurvatureSteeringLimits limits);
-static inline bool ford_reset_bypass_latch_check(int desired_curvature, int desired_path_angle);
 
 // Shared curvature/curvature_rate/path_offset/path_angle command checks for LateralMotionControl
 // (CAN) and LateralMotionControl2 (CAN FD) -- see ford_lmc_checks in ford.h.

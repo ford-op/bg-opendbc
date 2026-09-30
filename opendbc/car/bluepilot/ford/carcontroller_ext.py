@@ -32,8 +32,8 @@ class CarControllerExt:
     # driver manually turns, so the PSCM releases cleanly instead of stalling 2-3 s on
     # re-engage (observed on Mach-E). Panda-clean: every ford.h check has a legitimate
     # !steer_control_enabled branch for the zeroed frames; on release, path_angle ramps back
-    # from 0 through the soft ROC (no reset-bypass latch involvement). Curvature mode keeps
-    # its own reset_steering path (zeroed signals with mode still active) in LateralCurvExt.
+    # from 0 through the soft ROC. Curvature mode keeps its own reset_steering path (zeroed
+    # signals with mode still active) in LateralCurvExt.
     # The stall blip (lateral_angle_ext.py) rides the same mode-0 path: a short pulse that
     # resets the PSCM's post-override attenuation when the deviation clip deadlocks hands-free.
     lat_active = CC.latActive and not (angle_mode and (self.angle_human_turn_active or self.angle_stall_blip_active))

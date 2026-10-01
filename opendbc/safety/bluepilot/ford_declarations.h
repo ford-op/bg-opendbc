@@ -40,8 +40,6 @@
 // opendbc/sunnypilot/car/ford/values_ext.py BP_ANGLE_LIMITS.
 #define FORD_CURVATURE_MIN -0.02f
 #define FORD_CURVATURE_MAX 0.02f
-#define FORD_CURVATURE_RATE_MIN -0.001024f
-#define FORD_CURVATURE_RATE_MAX 0.00102375f
 #define FORD_PATH_OFFSET_MIN -1.0f
 #define FORD_PATH_OFFSET_MAX 1.0f
 #define FORD_PATH_ANGLE_MIN -0.25f
@@ -71,10 +69,9 @@ extern const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS]
 extern bool ford_bp_angle_mode_engaged;
 extern int16_t ford_bp_shadow_curvature_raw;  // wire units, scale 1e-6 1/m (see fordcan_ext.py)
 
-// last commanded values for the path_angle / path_offset / curvature_rate rate-of-change checks
+// last commanded values for the path_angle / path_offset rate-of-change checks
 extern int desired_path_angle_last;
 extern int desired_path_offset_last;
-extern int desired_curvature_rate_last;
 
 // ===============================
 // Function Declarations
@@ -82,12 +79,10 @@ extern int desired_curvature_rate_last;
 
 static inline bool path_angle_cmd_checks(int desired_path_angle, bool steer_control_enabled, AngleSteeringLimits limits);
 static inline bool path_offset_cmd_checks(int desired_path_offset, bool steer_control_enabled, AngleSteeringLimits limits);
-static inline bool curvature_rate_cmd_checks(int desired_curvature_rate, bool steer_control_enabled, AngleSteeringLimits limits);
 static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_control_enabled, CurvatureSteeringLimits limits);
 
 // Shared curvature/curvature_rate/path_offset/path_angle command checks for LateralMotionControl
 // (CAN) and LateralMotionControl2 (CAN FD) -- see ford_lmc_checks in ford.h.
 static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
                             bool steer_control_enabled, const CurvatureSteeringLimits *curvature_limits,
-                            const CurvatureSteeringLimits *curvature_limits_pinion, const AngleSteeringLimits *curvature_rate_limits,
-                            const char *dbg_prefix);
+                            const CurvatureSteeringLimits *curvature_limits_pinion, const char *dbg_prefix);

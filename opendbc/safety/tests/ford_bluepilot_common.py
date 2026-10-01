@@ -63,12 +63,8 @@ PATH_OFFSET_MAX_CAN = c_int(f32(FORD_PATH_OFFSET_MAX) * f32(PATH_OFFSET_TO_CAN))
 PATH_OFFSET_LOOKUP_X = (5., 15., 25.)
 PATH_OFFSET_LOOKUP_Y = (0.05, 0.025, 0.01)          # m per frame
 
-CURVATURE_RATE_MIN = -0.001024      # FORD_CURVATURE_RATE_MIN, rad/m^2
-CURVATURE_RATE_MAX = 0.00102375     # FORD_CURVATURE_RATE_MAX
-CURVATURE_RATE_TO_CAN_CANFD = 1000000.0   # FORD_CURVATURE_RATE_LIMITS_CANFD .angle_deg_to_can
-CURVATURE_RATE_TO_CAN_CAN = 4000000.0     # FORD_CURVATURE_RATE_LIMITS_CAN
-CURVATURE_RATE_LOOKUP_X = (5., 15., 25.)
-CURVATURE_RATE_LOOKUP_Y = (0.05, 0.025, 0.01)
+CURVATURE_RATE_TO_CAN_CANFD = 1000000.0   # LatCtlCrv_NoRate2_Actl wire resolution, 1e-6 1/m^2
+CURVATURE_RATE_TO_CAN_CAN = 4000000.0     # LatCtlCurv_NoRate_Actl wire resolution, 2.5e-7 1/m^2
 
 LATCTL_CURVATURE_SIGNAL_MAX = 0.02094  # rad/m, LatCtlCurv_No_Actl range [-0.02|0.02094] in the DBC
 CURVATURE_SIGNAL_MAX_CAN = c_int(f32(LATCTL_CURVATURE_SIGNAL_MAX) * f32(CURVATURE_TO_CAN))  # 1047: the packer cannot go further
@@ -206,7 +202,7 @@ def pinion_geometry_table() -> dict[int, tuple[float, float, float]]:
 
 
 def angle_roc_delta(xs, ys, scale: float, speed_min: float) -> int:
-  """path_angle / path_offset / curvature_rate per-frame ROC: interpolate(lookup, v.min - 1) * scale + 1."""
+  """path_angle / path_offset per-frame ROC: interpolate(lookup, v.min - 1) * scale + 1."""
   fudged = c_fudged_speed(speed_min, -1.0)
   return c_int(float(f32(c_interpolate(xs, ys, fudged) * f32(scale))) + 1.0)
 

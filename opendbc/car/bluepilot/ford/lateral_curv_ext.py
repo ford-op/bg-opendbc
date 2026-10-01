@@ -1,13 +1,13 @@
 """
 BluePilot Ford lateral curvature extension.
 
-Implements full 4-signal lateral control (curvature, curvature_rate, path_offset, path_angle)
+Implements Ford's 4-signal lateral control (curvature, curvature_rate, path_offset, path_angle)
 using predicted curvature from modelV2, PID-based lane centering, and laneline-aware path offset.
 Mixed into CarController as LateralCurvExt.
 
 Ford uses four signals to control steering:
   - curvature: primary steering command (also used in upstream, limited to 0.02 m^-1)
-  - curvature_rate: derivative of curvature for smoother entry/exit of curves
+  - curvature_rate: always 0, like upstream and stock Ford
   - path_offset: lateral offset for lane centering (blends model + laneline data)
   - path_angle: heading angle correction via PID controller
 
@@ -24,7 +24,7 @@ import numpy as np
 from numpy import clip, interp
 
 from opendbc.car.common.pid import PIDController
-from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, DT_CTRL, scale_rot_inertia, scale_tire_stiffness
+from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, scale_rot_inertia, scale_tire_stiffness
 from opendbc.car.lateral import ISO_LATERAL_ACCEL, apply_std_steer_angle_limits
 from opendbc.car.vehicle_model import VehicleModel
 from opendbc.car.ford.values import CarControllerParams, FordFlags
@@ -187,30 +187,15 @@ class LateralCurvExt:
     # Post lane change transition
     self.post_lane_change_timer = 0
     self.post_lane_change_active = False
-    self.pre_lane_change_values = {'path_angle': 0.0, 'path_offset': 0.0, 'desired_curvature_rate': 0.0}
+    self.pre_lane_change_values = {'path_angle': 0.0, 'path_offset': 0.0}
     self.max_path_angle_change = 0.00125
     self.max_path_offset_change = 0.00125
-    # Lane-change smoothing for curvature_rate; keep >= tightest BP rate step (0.00008 at 25 m/s)
-    self.max_curvature_rate_change = 0.00025
 
     # Human turn detection (shared with angle mode — see human_turn.HumanTurnDetector)
     self.human_turn_detector = HumanTurnDetector()
     self.human_turn = False
     self.post_reset_ramp_active = False
     self.reset_steering_last = False
-
-    # Curvature rate computation
-    self.curvature_rate_delta_t = 0.3  # seconds for derivative window
-    _dt_lat = CarControllerParams.STEER_STEP * DT_CTRL
-    self.curvature_rate_deque = deque(maxlen=int(round(self.curvature_rate_delta_t / _dt_lat)))
-    self.curvature_rate_speed_bp = [0.0, 14.5, 15.5]  # m/s
-    self.curvature_rate_speed_v = [1.0, 1.0, 0.0]
-    self.curvature_rate_PC_bp = [0.0, 0.008, 0.01]  # 1/m
-    self.curvature_rate_PC_v = [0.0, 0.0, 1.0]
-    self.large_curve_factor_low = 1.0
-    self.large_curve_factor_high = 0.80
-    self.large_curve_factor_bp = [0.001, 0.02]  # 1/m
-    self.large_curve_factor_v = [self.large_curve_factor_low, self.large_curve_factor_high]
 
     # Path offset
     self.custom_path_offset_curv = 0.0  # from UI
@@ -237,13 +222,10 @@ class LateralCurvExt:
     self.path_angle_max = 0.5
     self.path_offset_max = 2.0
     self.curvature_max = CURVATURE_MAX  # 0.02
-    self.curvature_rate_max = 0.001023
 
     # Previous frame values
-    self.curvature_rate_last = 0.0
     self.path_offset_last = 0.0
     self.path_angle_last = 0.0
-    self.curvature_rate = 0
 
   def update_lateral_params(self, params):
     """Read lateral-related Params from the UI. Called each frame."""
@@ -326,7 +308,6 @@ class LateralCurvExt:
       LateralResult namedtuple with all signals needed for CAN message construction.
     """
     apply_curvature = 0.0
-    desired_curvature_rate = 0.0
     path_offset = 0.0
     path_angle = 0.0
     reset_steering = 0
@@ -389,9 +370,6 @@ class LateralCurvExt:
         reset_steering = 1
       if reset_steering == 1:
         requested_curvature = 0.0
-        # BluePilot: keep deque from accumulating model curvature while commanding reset; avoids
-        # large desired_curvature_rate on the bus when κ/path_angle are zero (panda curvature_rate_cmd_checks).
-        self.curvature_rate_deque.clear()
 
       # Apply curvature limits (extended version returning max_curvature)
       apply_curvature, max_curvature, curvature_deviation_limited = apply_ford_curvature_limits_ext(
@@ -426,35 +404,6 @@ class LateralCurvExt:
           self.post_reset_ramp_active = False
 
       self.reset_steering_last = (reset_steering == 1)
-
-      # Curvature rate (derivative of predicted curvature), 20Hz-aligned with LateralMotionControl STEER_STEP
-      if reset_steering != 1:
-        self.curvature_rate_deque.append(predicted_curvature)
-        if len(self.curvature_rate_deque) > 1:
-          dt_frame = CarControllerParams.STEER_STEP * DT_CTRL
-          delta_t = (self.curvature_rate_delta_t
-                     if len(self.curvature_rate_deque) == self.curvature_rate_deque.maxlen
-                     else (len(self.curvature_rate_deque) - 1) * dt_frame)
-          desired_curvature_rate = ((self.curvature_rate_deque[-1] - self.curvature_rate_deque[0])
-                                     / delta_t / max(0.01, CS.out.vEgoRaw))
-        else:
-          desired_curvature_rate = 0.0
-      else:
-        desired_curvature_rate = 0.0
-
-      # Curvature rate factors
-      curvature_rate_PC_factor = interp(abs(predicted_curvature), self.curvature_rate_PC_bp, self.curvature_rate_PC_v)
-      desired_curvature_rate *= curvature_rate_PC_factor
-
-      curvature_rate_speed_factor = interp(CS.out.vEgoRaw, self.curvature_rate_speed_bp, self.curvature_rate_speed_v)
-      desired_curvature_rate *= curvature_rate_speed_factor
-
-      large_curve_factor = interp(abs(requested_curvature), self.large_curve_factor_bp, self.large_curve_factor_v)
-      desired_curvature_rate *= large_curve_factor
-
-      # Zero curvature rate during lane changes
-      if self.lane_change:
-        desired_curvature_rate = 0.0
 
       # Path offset: blend model position with laneline data
       if self.model is not None:
@@ -508,8 +457,7 @@ class LateralCurvExt:
       path_angle = path_angle_low_c  # path_angle_high_c not used currently
 
       # Post lane change transition smoothing
-      path_angle, path_offset, desired_curvature_rate = self._handle_post_lane_change_transition(
-        path_angle, path_offset, desired_curvature_rate)
+      path_angle, path_offset = self._handle_post_lane_change_transition(path_angle, path_offset)
 
       # Final reset handling
       if reset_steering == 1:
@@ -520,7 +468,6 @@ class LateralCurvExt:
       # apply_curvature reaches actuators.curvature via apply_curvature_last in carcontroller.py.
       # The cast is exact (both are IEEE 754 doubles), so no output value changes.
       apply_curvature = float(clip(apply_curvature, -self.curvature_max, self.curvature_max))
-      desired_curvature_rate = float(clip(desired_curvature_rate, -self.curvature_rate_max, self.curvature_rate_max))
       path_offset = float(clip(path_offset, -self.path_offset_max, self.path_offset_max))
       path_angle = float(clip(path_angle, -self.path_angle_max, self.path_angle_max))
 
@@ -538,7 +485,6 @@ class LateralCurvExt:
     else:
       # Lateral control off — zero everything
       apply_curvature = 0.0
-      desired_curvature_rate = 0.0
       path_offset = 0.0
       path_angle = 0.0
       self.path_angle_deque.clear()
@@ -548,7 +494,6 @@ class LateralCurvExt:
 
     # Update state for next frame
     self.lateralUncertainty = lateralUncertainty
-    self.curvature_rate_last = desired_curvature_rate
     self.path_offset_last = path_offset
     self.path_angle_last = path_angle
     # BluePilot: did the current_curvature +- CURVATURE_ERROR clip constrain the commanded
@@ -557,7 +502,7 @@ class LateralCurvExt:
 
     return LateralResult(
       apply_curvature=apply_curvature,
-      curvature_rate=desired_curvature_rate,
+      curvature_rate=0.0,  # always 0, like stock Ford
       path_offset=path_offset,
       path_angle=path_angle,
       ramp_type=ramp_type,
@@ -565,17 +510,17 @@ class LateralCurvExt:
       lateralUncertainty=lateralUncertainty,
     )
 
-  def _handle_post_lane_change_transition(self, path_angle, path_offset, desired_curvature_rate):
+  def _handle_post_lane_change_transition(self, path_angle, path_offset):
     """Smooth transition of control variables after lane change completes.
 
-    Rate-limits path_angle, path_offset, and curvature_rate back to target values
+    Rate-limits path_angle and path_offset back to target values
     over 160 frames (~8 seconds at 20Hz).
     """
     # Detect lane change completion (True → False transition)
     if self.lane_change_last and not self.lane_change:
       self.post_lane_change_active = True
       self.post_lane_change_timer = 0
-      self.pre_lane_change_values = {'path_angle': 0.0, 'path_offset': 0.0, 'desired_curvature_rate': 0.0}
+      self.pre_lane_change_values = {'path_angle': 0.0, 'path_offset': 0.0}
 
     self.lane_change_last = self.lane_change
 
@@ -588,22 +533,18 @@ class LateralCurvExt:
       new_path_offset = clip(path_offset,
                              self.pre_lane_change_values['path_offset'] - self.max_path_offset_change,
                              self.pre_lane_change_values['path_offset'] + self.max_path_offset_change)
-      new_curvature_rate = clip(desired_curvature_rate,
-                                self.pre_lane_change_values['desired_curvature_rate'] - self.max_curvature_rate_change,
-                                self.pre_lane_change_values['desired_curvature_rate'] + self.max_curvature_rate_change)
 
       self.pre_lane_change_values = {
         'path_angle': new_path_angle,
         'path_offset': new_path_offset,
-        'desired_curvature_rate': new_curvature_rate,
       }
 
       if self.post_lane_change_timer >= 160:
         self.post_lane_change_active = False
 
-      return (new_path_angle, new_path_offset, new_curvature_rate)
+      return (new_path_angle, new_path_offset)
 
-    return (path_angle, path_offset, desired_curvature_rate)
+    return (path_angle, path_offset)
 
   def _calculate_lateral_uncertainty(self, requested_curvature, apply_curvature, max_curvature):
     """Compute ratio of requested to max achievable curvature for the torque bar UI."""

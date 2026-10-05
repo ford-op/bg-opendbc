@@ -133,7 +133,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
 
   def test_signals_zero_when_steer_disabled(self):
     """With LatCtl_D2_Rq = 0 every signal must be zero (path_angle/path_offset_cmd_checks, the
-    curvature-rate check and steer_curvature_cmd_checks), each on its own and in combination."""
+    curvature-rate check and ford_bp_curvature_cmd_checks), each on its own and in combination."""
     self.set_meas(0, 15.0)
     self.assertFalse(self.tx(self.lat(False, 0.1, 0, 0, 0)))
     self.assertFalse(self.tx(self.lat(False, 0, 0, 0, 0.0001)))
@@ -148,7 +148,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
 
   def test_controls_not_allowed_blocks_steering(self):
     """steer enabled with controls not allowed is blocked whatever the signals carry: a real
-    curvature command (steer_curvature_cmd_checks), in curvature mode and with the angle-mode
+    curvature command (ford_bp_curvature_cmd_checks), in curvature mode and with the angle-mode
     flag set. Upstream's test_steer_allowed asserts this for the stock path; this is the BP path."""
     self.set_meas(0, 15.0)
     for angle_mode in (False, True):

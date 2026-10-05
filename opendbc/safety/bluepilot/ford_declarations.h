@@ -6,6 +6,7 @@
 #pragma once
 
 #include "opendbc/safety/declarations.h"
+#include "opendbc/safety/bluepilot/lateral_declarations.h"
 
 // BluePilot: Ford safety debug prints. Compile-time switch: build with -DFORD_BP_DEBUG (bench /
 // libsafety only) to turn every FORD_BP_DBG into a printf; otherwise it expands to nothing, so CI
@@ -84,5 +85,5 @@ static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool
 // Shared curvature/curvature_rate/path_offset/path_angle command checks for LateralMotionControl
 // (CAN) and LateralMotionControl2 (CAN FD) -- see ford_lmc_checks in ford.h.
 static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
-                            bool steer_control_enabled, const CurvatureSteeringLimits *curvature_limits,
-                            const CurvatureSteeringLimits *curvature_limits_pinion, const char *dbg_prefix);
+                            bool steer_control_enabled, const FordBpCurvatureLimits *curvature_limits,
+                            const FordBpCurvatureLimits *curvature_limits_pinion, const char *dbg_prefix);

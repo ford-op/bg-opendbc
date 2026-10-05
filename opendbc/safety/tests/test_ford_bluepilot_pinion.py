@@ -74,7 +74,7 @@ class BPPinionMixin:
     # python-side counter) the rx counter check drops frames until it re-syncs
     for _ in range(14):
       self._rx(self._speed_msg(speed))
-      self._rx(self._speed_msg_2(speed))  # steer_curvature_cmd_checks cross-checks the two speed sources
+      self._rx(self._speed_msg_2(speed))  # ford_bp_curvature_cmd_checks cross-checks the two speed sources
       self._rx(self._pinion_msg(curvature, speed))
 
   def test_rx_hook(self):

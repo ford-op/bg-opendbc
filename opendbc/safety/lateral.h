@@ -7,13 +7,6 @@ static const float ISO_LATERAL_ACCEL = 3.0;  // m/s^2
 static const float EARTH_G = 9.81;
 static const float AVERAGE_ROAD_ROLL = 0.06;  // ~3.4 degrees, 6% superelevation
 
-// BluePilot: measured-table curvature rate-of-change check used by steer_curvature_cmd_checks
-// below when CurvatureSteeringLimits.use_rate_lookup is set. Included here (after ISO_LATERAL_ACCEL
-// / EARTH_G / AVERAGE_ROAD_ROLL, which it also uses) rather than as a top-of-file include,
-// mirroring the modes/ford.h -> opendbc/safety/bluepilot/ford.h split.
-// cppcheck-suppress misra-c2012-20.1; needs ISO_LATERAL_ACCEL / EARTH_G / AVERAGE_ROAD_ROLL defined above
-#include "opendbc/safety/bluepilot/lateral.h"
-
 // check that commanded torque value isn't too far from measured
 static bool dist_to_meas_check(int val, int val_last, struct sample_t *val_meas,
                         const int MAX_RATE_UP, const int MAX_RATE_DOWN, const int MAX_ERROR) {
@@ -266,61 +259,55 @@ bool steer_curvature_cmd_checks(int desired_curvature, int steer_power, bool ste
     // *** absolute curvature cap ***
     violation |= safety_max_limit_check(desired_curvature, limits.max_curvature, -limits.max_curvature);
 
-    if (limits.use_rate_lookup) {
-      // BluePilot: measured-table rate limiting -- see bp_curvature_rate_lookup_check in
-      // opendbc/safety/bluepilot/lateral.h.
-      violation |= bp_curvature_rate_lookup_check(desired_curvature, &limits);
-    } else {
-      // *** ISO lateral accel limit ***
-      const float max_curvature = MAX_LATERAL_ACCEL / (fudged_speed * fudged_speed);
-      const int max_curvature_can = (max_curvature * limits.curvature_to_can) + 1.;
-      violation |= safety_max_limit_check(desired_curvature, max_curvature_can, -max_curvature_can);
+    // *** ISO lateral accel limit ***
+    const float max_curvature = MAX_LATERAL_ACCEL / (fudged_speed * fudged_speed);
+    const int max_curvature_can = (max_curvature * limits.curvature_to_can) + 1.;
+    violation |= safety_max_limit_check(desired_curvature, max_curvature_can, -max_curvature_can);
 
-      // *** ISO lateral jerk limit ***
-      const float max_curvature_rate_sec = MAX_LATERAL_JERK / (fudged_speed * fudged_speed);
-      const float max_curvature_delta = max_curvature_rate_sec / (float)limits.frequency;
-      const int max_curvature_delta_can = (max_curvature_delta * limits.curvature_to_can) + 1.;
+    // *** ISO lateral jerk limit ***
+    const float max_curvature_rate_sec = MAX_LATERAL_JERK / (fudged_speed * fudged_speed);
+    const float max_curvature_delta = max_curvature_rate_sec / (float)limits.frequency;
+    const int max_curvature_delta_can = (max_curvature_delta * limits.curvature_to_can) + 1.;
 
-      int highest_desired_curvature = curvature_state.desired_last + max_curvature_delta_can;
-      int lowest_desired_curvature = curvature_state.desired_last - max_curvature_delta_can;
+    int highest_desired_curvature = curvature_state.desired_last + max_curvature_delta_can;
+    int lowest_desired_curvature = curvature_state.desired_last - max_curvature_delta_can;
 
-      // *** curvature error from measured ***
-      // ensure we start moving in direction of meas while respecting relaxed rate limits if error is exceeded
-      if (limits.max_curvature_error && ((vehicle_speed.values[0] / VEHICLE_SPEED_FACTOR) > limits.curvature_error_min_speed)) {
-        // flipped fudge to avoid false positives
-        const float fudged_speed_error = (vehicle_speed.max / VEHICLE_SPEED_FACTOR) + 1.;
-        const float max_curvature_rate_sec_relaxed = MAX_LATERAL_JERK / (fudged_speed_error * fudged_speed_error);
-        const int max_curvature_delta_relaxed_can = (max_curvature_rate_sec_relaxed / (float)limits.frequency * limits.curvature_to_can) - 1.;
+    // *** curvature error from measured ***
+    // ensure we start moving in direction of meas while respecting relaxed rate limits if error is exceeded
+    if (limits.max_curvature_error && ((vehicle_speed.values[0] / VEHICLE_SPEED_FACTOR) > limits.curvature_error_min_speed)) {
+      // flipped fudge to avoid false positives
+      const float fudged_speed_error = (vehicle_speed.max / VEHICLE_SPEED_FACTOR) + 1.;
+      const float max_curvature_rate_sec_relaxed = MAX_LATERAL_JERK / (fudged_speed_error * fudged_speed_error);
+      const int max_curvature_delta_relaxed_can = (max_curvature_rate_sec_relaxed / (float)limits.frequency * limits.curvature_to_can) - 1.;
 
-        // openpilot clips its command to the lateral accel limit and to what the EPS accepts,
-        // so requiring more curvature than either can never be met
-        const int max_curvature_accel_can = (MAX_LATERAL_ACCEL / (fudged_speed_error * fudged_speed_error) * limits.curvature_to_can) - 1.;
-        const int max_curvature_relaxed_can = SAFETY_MIN(max_curvature_accel_can, limits.max_curvature);
+      // openpilot clips its command to the lateral accel limit and to what the EPS accepts,
+      // so requiring more curvature than either can never be met
+      const int max_curvature_accel_can = (MAX_LATERAL_ACCEL / (fudged_speed_error * fudged_speed_error) * limits.curvature_to_can) - 1.;
+      const int max_curvature_relaxed_can = SAFETY_MIN(max_curvature_accel_can, limits.max_curvature);
 
-        // the minimum and maximum curvature allowed based on the measured curvature
-        const int lowest_desired_curvature_error = curvature_state.meas.min - limits.max_curvature_error - 1;
-        const int highest_desired_curvature_error = curvature_state.meas.max + limits.max_curvature_error + 1;
+      // the minimum and maximum curvature allowed based on the measured curvature
+      const int lowest_desired_curvature_error = curvature_state.meas.min - limits.max_curvature_error - 1;
+      const int highest_desired_curvature_error = curvature_state.meas.max + limits.max_curvature_error + 1;
 
-        if (curvature_state.desired_last < lowest_desired_curvature_error) {
-          // demand winding up: never require more than the relaxed step, never past the error band edge,
-          // and never past what openpilot can reach (lat accel or max_curvature).
-          const int required = SAFETY_MIN(SAFETY_MIN(curvature_state.desired_last + max_curvature_delta_relaxed_can,
-                                                    lowest_desired_curvature_error), max_curvature_relaxed_can);
-          lowest_desired_curvature = SAFETY_MAX(lowest_desired_curvature, required);  // can't widen the rate limit window
+      if (curvature_state.desired_last < lowest_desired_curvature_error) {
+        // demand winding up: never require more than the relaxed step, never past the error band edge,
+        // and never past what openpilot can reach (lat accel or max_curvature).
+        const int required = SAFETY_MIN(SAFETY_MIN(curvature_state.desired_last + max_curvature_delta_relaxed_can,
+                                                   lowest_desired_curvature_error), max_curvature_relaxed_can);
+        lowest_desired_curvature = SAFETY_MAX(lowest_desired_curvature, required);  // can't widen the rate limit window
 
-        } else if (curvature_state.desired_last > highest_desired_curvature_error) {
-          const int required = SAFETY_MAX(SAFETY_MAX(curvature_state.desired_last - max_curvature_delta_relaxed_can,
-                                                    highest_desired_curvature_error), -max_curvature_relaxed_can);
-          highest_desired_curvature = SAFETY_MIN(highest_desired_curvature, required);
+      } else if (curvature_state.desired_last > highest_desired_curvature_error) {
+        const int required = SAFETY_MAX(SAFETY_MAX(curvature_state.desired_last - max_curvature_delta_relaxed_can,
+                                                   highest_desired_curvature_error), -max_curvature_relaxed_can);
+        highest_desired_curvature = SAFETY_MIN(highest_desired_curvature, required);
 
-        } else {
-          // already inside error boundary, don't allow commanding outside it
-          highest_desired_curvature = SAFETY_MIN(highest_desired_curvature, highest_desired_curvature_error);
-          lowest_desired_curvature = SAFETY_MAX(lowest_desired_curvature, lowest_desired_curvature_error);
-        }
+      } else {
+        // already inside error boundary, don't allow commanding outside it
+        highest_desired_curvature = SAFETY_MIN(highest_desired_curvature, highest_desired_curvature_error);
+        lowest_desired_curvature = SAFETY_MAX(lowest_desired_curvature, lowest_desired_curvature_error);
       }
-      violation |= safety_max_limit_check(desired_curvature, highest_desired_curvature, lowest_desired_curvature);
     }
+    violation |= safety_max_limit_check(desired_curvature, highest_desired_curvature, lowest_desired_curvature);
 
     // *** real time rate limit check ***
     violation |= rt_curvature_rate_limit_check(limits);

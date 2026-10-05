@@ -101,7 +101,7 @@ def c_fudged_speed(speed_ms: float, offset: float) -> np.float32:
 
 
 class BPFordLateralModel:
-  """Mirror of the BP curvature path in steer_curvature_cmd_checks + bp_curvature_rate_lookup_check.
+  """Mirror of the BP curvature path in ford_bp_curvature_cmd_checks + bp_curvature_rate_lookup_check.
 
   Speeds are what the C sees: vehicle_speed.min / max / values[0] in m/s (read back from
   libsafety after the rx messages so packer rounding is included).

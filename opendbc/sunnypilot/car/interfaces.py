@@ -11,7 +11,7 @@ from typing import NamedTuple
 from collections.abc import Callable
 
 from opendbc.car import structs
-from opendbc.car.bluepilot.ford.values_ext import FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, FordSafetyFlagsSP
+from opendbc.car.bluepilot.ford.values_ext import init_ford_safety_param_sp
 from opendbc.car.can_definitions import CanRecvCallable, CanSendCallable
 from opendbc.car.hyundai.values import HyundaiFlags
 from opendbc.car.subaru.values import SubaruFlags
@@ -91,7 +91,7 @@ def setup_interfaces(CI, CP: structs.CarParams, CP_SP: structs.CarParamsSP,
   _initialize_radar_tracks(CP, CP_SP, can_recv, can_send)
   _initialize_stop_and_go(CP, CP_SP, params_dict)
   _initialize_toyota(CP, CP_SP, params_dict)
-  _initialize_ford(CP, CP_SP, params_dict)
+  init_ford_safety_param_sp(CP, CP_SP, params_dict)  # BluePilot
 
 
 def _initialize_custom_longitudinal_tuning(CI, CP: structs.CarParams, CP_SP: structs.CarParamsSP,
@@ -153,42 +153,6 @@ def _initialize_stop_and_go(CP: structs.CarParams, CP_SP: structs.CarParamsSP, p
       CP_SP.flags |= SubaruFlagsSP.STOP_AND_GO_MANUAL_PARKING_BRAKE.value
     if stop_and_go or stop_and_go_manual_parking_brake:
       CP_SP.safetyParam |= SubaruSafetyFlagsSP.STOP_AND_GO
-
-
-def _param_bool(params_dict: dict, key: str) -> bool:
-  """BluePilot: params_dict values arrive as whatever Params returned (bool, int, str, None);
-  a restored backup can hold 'true'/'false' text. Never raise inside get_car."""
-  v = params_dict.get(key)
-  if isinstance(v, str):
-    return v.strip().lower() in ("1", "true")
-  return bool(v)
-
-
-def _initialize_ford(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params_dict: dict[str, str]) -> None:
-  # BluePilot: steering-angle curvature measurement (bad-yaw-sensor workaround). Sets the
-  # STEER_ANGLE_CURVATURE flag + the platform geometry-table index on CP_SP.safetyParam,
-  # which reaches the safety firmware as current_safety_param_sp (USB 0xdf); the control
-  # side mirrors the same flag (lateral_curv_ext.get_current_curvature). Platforms without
-  # a geometry row silently keep stock yaw behavior -- the toggle no-ops rather than
-  # half-configuring.
-  if CP.brand == 'ford':
-    # BluePilot 4-signal lateral: tell the panda to run the BP checks. Read once here, at init;
-    # the carcontroller sends 4-signal messages only when this bit is set. Changing the setting
-    # while driving does not change the panda: stock messages are then judged by the BP
-    # envelope (which is not identical to the stock one), so the setting takes full effect at
-    # the next init. Same property as openpilot longitudinal.
-    bp_lateral = not _param_bool(params_dict, "disable_BP_lat_UI")
-    if bp_lateral:
-      CP_SP.safetyParam |= FordSafetyFlagsSP.BP_LATERAL
-
-    # The pinion-sourced measurement is a BP lateral feature: its wider error band and the
-    # Python side's yaw-vs-pinion handling only line up on the BP path, so it is off whenever
-    # BP lateral is off (ford_init enforces the same on the panda).
-    steer_angle_curvature = bp_lateral and _param_bool(params_dict, "FordPrefSteerAngleCurvature")
-    if steer_angle_curvature:
-      geometry_index = FORD_PINION_GEOMETRY_INDEX.get(CP.carFingerprint)
-      if geometry_index is not None:
-        CP_SP.safetyParam |= FordSafetyFlagsSP.STEER_ANGLE_CURVATURE | (geometry_index << FORD_PINION_GEOMETRY_SHIFT)
 
 
 def _initialize_toyota(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params_dict: dict[str, str]) -> None:

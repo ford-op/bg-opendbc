@@ -3,7 +3,7 @@ BluePilot Ford lateral curvature extension.
 
 Implements Ford's 4-signal lateral control (curvature, curvature_rate, path_offset, path_angle)
 using predicted curvature from modelV2, PID-based lane centering, and laneline-aware path offset.
-Mixed into CarController as LateralCurvExt.
+Mixed into BluePilotLateral (carcontroller_ext.py) as LateralCurvExt.
 
 Ford uses four signals to control steering:
   - curvature: primary steering command (also used in upstream, limited to 0.02 m^-1)
@@ -132,7 +132,7 @@ class LateralCurvExt:
   """
   BluePilot lateral control extension for Ford vehicles.
 
-  Mixed into CarController via multiple inheritance. CarController calls
+  Mixed into BluePilotLateral (carcontroller_ext.py), which calls
   LateralCurvExt.update() during the lateral control loop (20Hz) to get the full
   4-signal steering command instead of the upstream curvature-only approach.
   """
@@ -144,13 +144,13 @@ class LateralCurvExt:
     self.lp = None
     self.lateral_delay = 0.0
 
-    # Primary lateral control variable: consumed by CarController's lateral dispatch.
+    # Primary lateral control variable: consumed by BluePilotLateral's lateral dispatch.
     self.primary_lateral_control = PrimaryLateralControl.curvature
 
     # BluePilot: steering-angle curvature measurement (bad-yaw-sensor workaround).
     # Mirrors the STEER_ANGLE_CURVATURE flag the safety firmware reads from
     # current_safety_param_sp -- both layers must always agree, so this is init-time
-    # state from CP_SP (set by _initialize_ford at car init), never a live Params read:
+    # state from CP_SP (set by values_ext.init_ford_safety_param_sp at car init), never a live Params read:
     # a live flip against stale firmware would fight the panda.
     self.bp_pinion_curvature_enabled = bool(
       CP_SP is not None and (CP_SP.safetyParam & FordSafetyFlagsSP.STEER_ANGLE_CURVATURE))
@@ -295,7 +295,7 @@ class LateralCurvExt:
     """
     Compute lateral steering signals for the current frame.
 
-    Called at 20Hz from CarController.update() when inside the STEER_STEP block.
+    Called at 20Hz from BluePilotLateral.step_lateral() when inside the STEER_STEP block.
 
     Args:
       CC: CarControl with latActive, hudControl

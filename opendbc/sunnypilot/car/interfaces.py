@@ -11,7 +11,7 @@ from typing import NamedTuple
 from collections.abc import Callable
 
 from opendbc.car import structs
-from opendbc.car.bluepilot.ford.values_ext import init_ford_safety_param_sp
+from opendbc.car.bluepilot.ford.values_ext import init_ford_safety_param_sp  # BluePilot
 from opendbc.car.can_definitions import CanRecvCallable, CanSendCallable
 from opendbc.car.hyundai.values import HyundaiFlags
 from opendbc.car.subaru.values import SubaruFlags

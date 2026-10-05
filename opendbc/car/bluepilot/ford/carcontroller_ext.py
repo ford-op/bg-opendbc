@@ -93,6 +93,8 @@ class BluePilotLateral(LateralCurvExt, LateralAngleExt):
     # BluePilot: tell safety/bluepilot/ford.h whether angle mode is engaged, packed into
     # Lane_Assist_Data1's unused bits. shadow_curvature is negated to match the
     # path_angle/apply_curvature wire convention that ford.h's angle_meas is calibrated against.
+    # The disable_BP_lat_UI check always passes here (step_lka only runs while BluePilot lateral is
+    # active); it can go in the mixin restructure.
     angle_mode_engaged = (not self.disable_BP_lat_UI) and (self.primary_lateral_control == PrimaryLateralControl.angle)
     shadow_curvature = -self.bp_kappa_cmd if angle_mode_engaged else 0.0
     return fordcan_ext.create_lka_msg(

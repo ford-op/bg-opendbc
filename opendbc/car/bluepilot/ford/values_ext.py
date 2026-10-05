@@ -5,6 +5,7 @@ This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 
+from opendbc.car import structs
 from opendbc.car.ford.values import CAR
 from opendbc.car.lateral import AngleSteeringLimits
 
@@ -52,6 +53,44 @@ FORD_PINION_GEOMETRY_INDEX = {
   CAR.FORD_MUSTANG_MACH_E_MK1: 11,
   CAR.FORD_RANGER_MK2: 12,
 }
+
+
+def _param_bool(params_dict: dict, key: str) -> bool:
+  """params_dict values arrive as whatever Params returned (bool, int, str, None);
+  a restored backup can hold 'true'/'false' text. Never raise inside get_car."""
+  v = params_dict.get(key)
+  if isinstance(v, str):
+    return v.strip().lower() in ("1", "true")
+  return bool(v)
+
+
+def init_ford_safety_param_sp(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params_dict: dict[str, str]) -> None:
+  # Called from sunnypilot's setup_interfaces at car init.
+  # Steering-angle curvature measurement (bad-yaw-sensor workaround): sets the
+  # STEER_ANGLE_CURVATURE flag + the platform geometry-table index on CP_SP.safetyParam,
+  # which reaches the safety firmware as current_safety_param_sp (USB 0xdf); the control
+  # side mirrors the same flag (lateral_curv_ext.get_current_curvature). Platforms without
+  # a geometry row silently keep stock yaw behavior -- the toggle no-ops rather than
+  # half-configuring.
+  if CP.brand == 'ford':
+    # BluePilot 4-signal lateral: tell the panda to run the BP checks. Read once here, at init;
+    # the carcontroller sends 4-signal messages only when this bit is set. Changing the setting
+    # while driving does not change the panda: stock messages are then judged by the BP
+    # envelope (which is not identical to the stock one), so the setting takes full effect at
+    # the next init. Same property as openpilot longitudinal.
+    bp_lateral = not _param_bool(params_dict, "disable_BP_lat_UI")
+    if bp_lateral:
+      CP_SP.safetyParam |= FordSafetyFlagsSP.BP_LATERAL
+
+    # The pinion-sourced measurement is a BP lateral feature: its wider error band and the
+    # Python side's yaw-vs-pinion handling only line up on the BP path, so it is off whenever
+    # BP lateral is off (ford_init enforces the same on the panda).
+    steer_angle_curvature = bp_lateral and _param_bool(params_dict, "FordPrefSteerAngleCurvature")
+    if steer_angle_curvature:
+      geometry_index = FORD_PINION_GEOMETRY_INDEX.get(CP.carFingerprint)
+      if geometry_index is not None:
+        CP_SP.safetyParam |= FordSafetyFlagsSP.STEER_ANGLE_CURVATURE | (geometry_index << FORD_PINION_GEOMETRY_SHIFT)
+
 
 # Pinion geometry wheelbase (m) where BluePilot deliberately differs from CarSpecs. Used by both the
 # C table (ford_pinion_geometry in safety/bluepilot/ford.h) and the Python pinion path

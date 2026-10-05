@@ -167,7 +167,7 @@ class LateralAngleExt:
     self.lane_centering_strength_ang = 0.25
     # Telemetry: variable curvature lookup time used this frame (s)
     self.bp_curvature_lookup_time = _VLT_T_EXTRA_MAX + 0.3725  # warm start at ~0.5s
-    # BluePilot: error-clipped kappa path_angle was derived from -- carcontroller.py reads this as
+    # BluePilot: error-clipped kappa path_angle was derived from -- carcontroller_ext.py reads this as
     # shadow_curvature for ford.h's angle-mode deviation check. Actively consumed, not telemetry.
     self.bp_kappa_cmd = 0.0
     # BluePilot: rate-limit diagnostics (controllerStateBP)
@@ -180,12 +180,12 @@ class LateralAngleExt:
     # Human-turn override: while the driver manually turns, lateral is forced inactive (mode 0,
     # all-zero signals) instead of winding path_angle into a stale command the PSCM can't cleanly
     # reconcile on release (2-3 s re-engage dead time observed on Mach-E). See module docstring.
-    # Note: in CarController this attribute is shared with LateralCurvExt (same mixin instance) --
+    # Note: in BluePilotLateral this attribute is shared with LateralCurvExt (same mixin instance) --
     # only one lateral strategy runs per frame, so a single detector serves both.
     self.human_turn_detector = HumanTurnDetector()
-    self.angle_human_turn_active = False  # read by carcontroller to force mode 0
+    self.angle_human_turn_active = False  # read by BluePilotLateral.step_lateral to force mode 0
     # Post-override stall blip state (see module constants). angle_stall_blip_active is read by
-    # carcontroller to force mode 0, exactly like angle_human_turn_active.
+    # BluePilotLateral.step_lateral to force mode 0, exactly like angle_human_turn_active.
     self.stall_blip_hold_s = 0.0      # accumulated deviation-clip-binding time toward a pulse
     self.stall_blip_frames_left = 0   # remaining pulse frames; > 0 -> mode 0 on the wire
     self.stall_blip_cooldown_s = 0.0  # re-arm delay after a pulse
@@ -299,7 +299,7 @@ class LateralAngleExt:
       )
 
     # Human-turn override: sustained driver press + large wheel angle → force lateral inactive
-    # (carcontroller drops mode to 0; all signals are zero on the wire) so path_angle can't wind
+    # (BluePilotLateral.step_lateral drops mode to 0; all signals are zero on the wire) so path_angle can't wind
     # into a stale command while the driver turns. Always on in angle mode (no param gate) -- the
     # curv-suffixed human-turn toggle belongs to curvature mode's reset strategy, and the Mach-E
     # PSCM re-engage stall this prevents is not something a user should be able to opt out of.
@@ -565,7 +565,7 @@ class LateralAngleExt:
     self.path_angle_last = path_angle
     self.bp_path_angle_final = path_angle
     self.apply_curvature_last = 0.0
-    # BluePilot: the error-clipped kappa path_angle was derived from -- carcontroller.py reads this
+    # BluePilot: the error-clipped kappa path_angle was derived from -- carcontroller_ext.py reads this
     # as shadow_curvature for ford.h's angle-mode deviation check (see fordcan_ext.create_lka_msg).
     # Not just telemetry: an actively-consumed value, unlike the removed *_kappa_cmd_raw stubs.
     # While the driver is pressing (before the human-turn override latches), the clipped planner

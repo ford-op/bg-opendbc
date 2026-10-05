@@ -1,19 +1,54 @@
 """
-BluePilot Ford CarController extension: strategy dispatch and message assembly.
+BluePilot Ford lateral: the one object the Ford CarController calls.
 
-Mixed into CarController alongside LateralCurvExt and LateralAngleExt. Lives above both
-(rather than inside either) so it can call into both strategies without the circular import
-that would result from one strategy module depending on the other.
+Combines LateralCurvExt and LateralAngleExt (unchanged mixins) with the strategy dispatch and
+message assembly. Lives above both strategy modules (rather than inside either) so it can call
+into both without the circular import that would result from one depending on the other.
+
+The CarController owns apply_curvature_last, which the stock and BluePilot paths share: it is
+passed into step_lateral and the result returned, so switching BluePilot lateral off mid-drive
+continues from the last command, as before.
 """
 
 from opendbc.car.ford.values import CarControllerParams, FordFlags
 from opendbc.car.bluepilot.ford import fordcan_ext
 from opendbc.car.bluepilot.ford.lateral_angle_ext import LateralAngleExt
-from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl
+from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param
+from opendbc.car.bluepilot.ford.param_store import ParamStore
+from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP
 
 
-class CarControllerExt:
-  def build_steer_can_sends(self, CC, CS, actuators):
+class BluePilotLateral(LateralCurvExt, LateralAngleExt):
+  def __init__(self, CP, CP_SP, packer, CAN):
+    self.CP = CP
+    self.frame = 0
+    LateralCurvExt.__init__(self, CP, CP_SP)
+    LateralAngleExt.__init__(self, CP, CP_SP)
+    self.packer = packer
+    self.CAN = CAN
+
+    self.disable_BP_lat_UI = False
+    # the panda only accepts 4-signal messages when this bit was set at init
+    self.bp_lateral_allowed = bool(CP_SP.safetyParam & FordSafetyFlagsSP.BP_LATERAL)
+
+  def update(self, CC_SP, frame):
+    """Every frame: take this frame's model / vehicle-parameter inputs and UI params from CC_SP
+    (the fork fills both; opendbc reads nothing from openpilot directly). Returns whether
+    BluePilot lateral is active. Overrides LateralCurvExt.update on this class; the strategy is
+    always called explicitly as LateralCurvExt.update(self, ...)."""
+    self.frame = frame
+    LateralCurvExt.update_inputs(self, CC_SP)
+    params = ParamStore.from_cc_sp(CC_SP)
+    LateralCurvExt.update_lateral_params(self, params)
+    LateralAngleExt.update_angle_params(self, params)
+    # One flag for every BP consumer (LatCtl dispatch, LKA angle-mode bits, mode reporting): the UI
+    # toggle, and the panda bit that was set at init. No 4-signal traffic to a stock-configured panda.
+    self.disable_BP_lat_UI = _read_param(params, "disable_BP_lat_UI", bool, False) or not self.bp_lateral_allowed
+    return not self.disable_BP_lat_UI
+
+  def step_lateral(self, CC, CS, actuators, apply_curvature_last):
+    """At STEER_STEP: the steer message(s). Returns (can_sends, apply_curvature)."""
+    self.apply_curvature_last = apply_curvature_last
     # BluePilot: select the BP lateral strategy by primary control variable.
     #   angle     -> LateralAngleExt: kappa -> path_angle (c1), apply_curvature held at 0.
     #   curvature -> LateralCurvExt: full 4-signal curvature-primary (default).
@@ -51,12 +86,15 @@ class CarControllerExt:
         self.packer, self.CAN, lat_active, lat.ramp_type, lat.precision_type,
         -lat.path_offset, -lat.path_angle, -lat.apply_curvature, -lat.curvature_rate
       ))
-    return can_sends
+    return can_sends, self.apply_curvature_last
 
-  def build_lka_can_send(self, CC, hud_control):
+  def step_lka(self, CC, hud_control):
+    """At LKA_STEP: the Lane_Assist_Data1 message."""
     # BluePilot: tell safety/bluepilot/ford.h whether angle mode is engaged, packed into
     # Lane_Assist_Data1's unused bits. shadow_curvature is negated to match the
     # path_angle/apply_curvature wire convention that ford.h's angle_meas is calibrated against.
+    # The disable_BP_lat_UI check always passes here (step_lka only runs while BluePilot lateral is
+    # active); it can go in the mixin restructure.
     angle_mode_engaged = (not self.disable_BP_lat_UI) and (self.primary_lateral_control == PrimaryLateralControl.angle)
     shadow_curvature = -self.bp_kappa_cmd if angle_mode_engaged else 0.0
     return fordcan_ext.create_lka_msg(

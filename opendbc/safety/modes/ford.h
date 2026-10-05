@@ -101,23 +101,22 @@ static bool ford_get_quality_flag_valid(const CANPacket_t *msg) {
 // BluePilot pinion-sourced path (STEER_ANGLE_CURVATURE), because the raw pinion angle has
 // no roll/alignment-offset compensation in firmware (the Python layer compensates via
 // liveParameters; firmware uses the raw pinion angle).
-// BluePilot: now a CurvatureSteeringLimits. Upstream moved Ford off AngleSteeringLimits when it
-// made curvature a first-class SteerControlType, and in doing so removed max_angle_error,
-// angle_error_min_speed, angle_is_curvature, enforce_angle_error and inactive_angle_is_zero from
-// AngleSteeringLimits entirely. The VALUES below are unchanged from the pre-sync macro -- only the
-// field names and the struct differ. use_rate_lookup keeps the measured tables in play instead of
-// upstream's ISO-jerk-derived delta; see steer_curvature_cmd_checks in lateral.h.
+// BluePilot: a FordBpCurvatureLimits (opendbc/safety/bluepilot/lateral_declarations.h): upstream's
+// CurvatureSteeringLimits as .base plus the measured rate tables, checked by
+// ford_bp_curvature_cmd_checks instead of upstream's ISO-jerk-derived delta. The VALUES are
+// unchanged from the pre-sync macro. ford_bp_curvature_cmd_checks assumes max_steer_power 0 and
+// inactive_curvature_is_zero true rather than reading them; they stay set to say what Ford is.
 #define FORD_LIMITS(limit_lateral_accel, max_curv_err) {                                         \
-  .max_curvature = 1000,          /* 0.02 curvature */                                           \
-  .curvature_to_can = 50000,      /* 1 / (2e-5) rad to can */                                    \
-  .frequency = 20U,               /* LateralMotionControl / LateralMotionControl2 @ 20 Hz */     \
-  .max_curvature_error = (max_curv_err),                                                         \
-  /* no blending at low speed due to lack of torque wind-up and inaccurate current curvature */  \
-  .curvature_error_min_speed = 10.0,  /* m/s */                                                  \
-  .max_steer_power = 0,           /* Ford has no steer power signal */                           \
-  .inactive_curvature_is_zero = true,                                                            \
-                                                                                                 \
-  .use_rate_lookup = true,                                                                       \
+  .base = {                                                                                      \
+    .max_curvature = 1000,          /* 0.02 curvature */                                         \
+    .curvature_to_can = 50000,      /* 1 / (2e-5) rad to can */                                  \
+    .frequency = 20U,               /* LateralMotionControl / LateralMotionControl2 @ 20 Hz */   \
+    .max_curvature_error = (max_curv_err),                                                       \
+    /* no blending at low speed due to lack of torque wind-up and inaccurate current curvature */\
+    .curvature_error_min_speed = 10.0,  /* m/s */                                                \
+    .max_steer_power = 0,           /* Ford has no steer power signal */                         \
+    .inactive_curvature_is_zero = true,                                                          \
+  },                                                                                             \
   /* Down table 1% looser than up (#20); both >= the Python control's tables (values_ext) */     \
   .curvature_rate_up_lookup = {                                                                  \
     {5., 16., 25.},                                                                              \
@@ -234,10 +233,10 @@ static void ford_rx_hook(const CANPacket_t *msg) {
 
 static bool ford_tx_hook(const CANPacket_t *msg) {
   // BluePilot: only this hook reads these
-  static const CurvatureSteeringLimits FORD_BP_STEERING_LIMITS = FORD_LIMITS(false, 100);
-  static const CurvatureSteeringLimits FORD_BP_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
-  static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS = FORD_LIMITS(true, 100);
-  static const CurvatureSteeringLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LIMITS(true, 150);
+  static const FordBpCurvatureLimits FORD_BP_STEERING_LIMITS = FORD_LIMITS(false, 100);
+  static const FordBpCurvatureLimits FORD_BP_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
+  static const FordBpCurvatureLimits FORD_CANFD_STEERING_LIMITS = FORD_LIMITS(true, 100);
+  static const FordBpCurvatureLimits FORD_CANFD_STEERING_LIMITS_PINION = FORD_LIMITS(true, 150);
 
   const LongitudinalLimits FORD_LONG_LIMITS = {
     // acceleration cmd limits (used for brakes)

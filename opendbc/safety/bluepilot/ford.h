@@ -6,6 +6,7 @@
 #pragma once
 
 #include "opendbc/safety/bluepilot/ford_declarations.h"
+#include "opendbc/safety/bluepilot/lateral.h"
 
 // ===============================
 // Global Variables
@@ -118,7 +119,8 @@ static inline bool path_offset_cmd_checks(int desired_path_offset, bool steer_co
 // frame with nothing driving it toward path_angle's own smooth ROC). This is a pure per-frame
 // proximity check: does this frame's steering intent make physical sense given where the car is.
 // BluePilot: enforce_angle_error is gone from the struct; the check is unconditional now because
-// the only caller passes FORD_BP_STEERING_LIMITS(_PINION), both of which set it true pre-sync.
+// its only caller, ford_lmc_checks, passes the base of a BluePilot limit set (FORD_LIMITS in
+// modes/ford.h), all of which set it true pre-sync.
 static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool steer_control_enabled,
                                                const CurvatureSteeringLimits limits) {
   bool violation = false;
@@ -135,11 +137,11 @@ static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool
 // LateralMotionControl (CAN) and LateralMotionControl2 (CAN FD) -- the two messages carry
 // identical signals at different bit offsets and CAN-unit scales, so the caller decodes the raw
 // signals and picks the right limit tables (curvature_limits / curvature_limits_pinion for the
-// steer_curvature_cmd_checks + shadow-curvature call), and this function does the rest.
+// ford_bp_curvature_cmd_checks + shadow-curvature call), and this function does the rest.
 // dbg_prefix labels the FORD_BP_DBG output ("CAN Out" / "CANFD Out").
 static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
-                            bool steer_control_enabled, const CurvatureSteeringLimits *curvature_limits,
-                            const CurvatureSteeringLimits *curvature_limits_pinion, const char *dbg_prefix) {
+                            bool steer_control_enabled, const FordBpCurvatureLimits *curvature_limits,
+                            const FordBpCurvatureLimits *curvature_limits_pinion, const char *dbg_prefix) {
   // dbg_prefix is only read inside FORD_BP_DBG, which expands to a no-op unless FORD_BP_DEBUG is defined for the
   // debug build, making the parameter otherwise unused.
   SAFETY_UNUSED(dbg_prefix);
@@ -189,15 +191,15 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
 
   // BluePilot: the pinion-sourced angle_meas variant carries a wider curvature error band -- see
   // the FORD_LIMITS macro comment in modes/ford.h. Everything else in the two limit sets is identical.
-  const CurvatureSteeringLimits *limits = ford_bp_pinion_curvature ? curvature_limits_pinion : curvature_limits;
+  const FordBpCurvatureLimits *limits = ford_bp_pinion_curvature ? curvature_limits_pinion : curvature_limits;
 
   bool violation = false;
 
   // Check curvature value limits (already converted to signed CAN units by the caller). Note:
   // curvature's wire scale (curvature_to_can) is the same for CAN and CAN FD, so this is safe to
   // read off the (possibly pinion-widened) limits struct regardless of bus.
-  int curvature_min_can = (int)(FORD_CURVATURE_MIN * limits->curvature_to_can);
-  int curvature_max_can = (int)(FORD_CURVATURE_MAX * limits->curvature_to_can);
+  int curvature_min_can = (int)(FORD_CURVATURE_MIN * limits->base.curvature_to_can);
+  int curvature_max_can = (int)(FORD_CURVATURE_MAX * limits->base.curvature_to_can);
   violation |= (desired_curvature < curvature_min_can) || (desired_curvature > curvature_max_can);
   FORD_BP_DBG("%s: desired_curvature: %d, curvature_min_can: %d, curvature_max_can: %d, violation: %d\n",
               dbg_prefix, desired_curvature, curvature_min_can, curvature_max_can, (int)violation);
@@ -230,20 +232,20 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
 
   // Check angle error and steer_control_enabled for curvature. Angle mode holds curvature pinned
   // at 0 while path_angle does the real steering, so the deviation-vs-measured portion of
-  // steer_curvature_cmd_checks would eventually trip as the car actually turns (measured curvature
+  // ford_bp_curvature_cmd_checks would eventually trip as the car actually turns (measured curvature
   // moves, commanded curvature doesn't) -- skip applying it when desired_curvature == 0. Still call
-  // it to keep desired_angle_last in sync, and path_angle keeps its own checks regardless. But
-  // steer_curvature_cmd_checks also carries the controls_allowed gate; restore that piece
+  // it to keep curvature_state.desired_last in sync, and path_angle keeps its own checks regardless. But
+  // ford_bp_curvature_cmd_checks also carries the controls_allowed gate; restore that piece
   // explicitly so a steer_control_enabled frame at curvature == 0 can't bypass it.
   // The message-rate check (rt_curvature_rate_limit_check) is discarded with the rest, so mirror it
   // here. Read the window before the call: the call counts this frame and may roll the window.
   bool rt_violation = false;
   if ((controls_allowed || controls_allowed_lateral) && steer_control_enabled) {
-    const int max_rt_msgs = ((float)limits->frequency * MAX_RT_INTERVAL / 1e6 * 1.2) + 1;  // as lateral.h
+    const int max_rt_msgs = ((float)limits->base.frequency * MAX_RT_INTERVAL / 1e6 * 1.2) + 1;  // as lateral.h
     const uint32_t rt_msgs = curvature_state.rt_msgs + curvature_state.rt_msgs_prev;
     rt_violation = (int)rt_msgs > max_rt_msgs;
   }
-  bool curvature_violation = steer_curvature_cmd_checks(desired_curvature, 0, steer_control_enabled, *limits);
+  bool curvature_violation = ford_bp_curvature_cmd_checks(desired_curvature, steer_control_enabled, limits);
   if (desired_curvature != 0) {
     violation |= curvature_violation;
   } else {
@@ -261,7 +263,7 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
     // shadow_curvature raw scale 1e-6 -> CAN units (2e-5): * 0.05
     const float shadow_curvature_scaled = (float)ford_bp_shadow_curvature_raw * 0.05f;
     int shadow_curvature_can = (int)shadow_curvature_scaled;
-    violation |= ford_shadow_curvature_error_check(shadow_curvature_can, steer_control_enabled, *limits);
+    violation |= ford_shadow_curvature_error_check(shadow_curvature_can, steer_control_enabled, limits->base);
   }
 
   // Check path angle rate of change limits

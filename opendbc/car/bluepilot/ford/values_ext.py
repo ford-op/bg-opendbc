@@ -72,8 +72,8 @@ CURVATURE_MAX = 0.02
 # for comfort, and very low rates at highway speed for stability.
 #
 # Control (Python) uses stricter windup than unwind so OP stays inside panda when apply_std
-# picks the wrong table vs steer_curvature_cmd_checks. Safety firmware uses looser symmetric
-# ROCs (former “down” table for both up/down) — see safety/bluepilot/ford.h FORD_LIMITS.
+# picks the wrong table vs ford_bp_curvature_cmd_checks. Safety firmware uses looser symmetric
+# ROCs (former “down” table for both up/down) — see safety/modes/ford.h FORD_LIMITS.
 _BP_ANGLE_RATE_UP = ([5, 16, 25], [0.0025, 0.0012, 0.00008])
 _BP_ANGLE_RATE_DOWN = ([5, 16, 25], [0.0025, 0.0014, 0.00018])
 BP_ANGLE_LIMITS = AngleSteeringLimits(

@@ -375,10 +375,8 @@ static inline void ford_bp_rx_hook(const CANPacket_t *msg) {
 // geometry index, 5 BP 4-signal lateral (clear = upstream's stock lateral safety, verbatim). A zero
 // or out-of-range index disables the pinion source, so a half-configured param can never select the
 // wrong geometry: the stock yaw path is kept. Returns whether the pinion source is on, i.e. whether
-// ford_init applies the pinion RX check. That check stays out of the stock config, so a pinion
-// hiccup can't disable controls for users who never consume the message. StePinAn_No_Cs doesn't
-// match Ford's sum-invert checksum patterns on real frames, so the check ignores it; the counter
-// (verified 0-15 on real frames), quality flag and 100 Hz rate carry the integrity.
+// ford_init applies the pinion RX check (ford_rx_checks_pinion). That check stays out of the stock
+// config, so a pinion hiccup can't disable controls for users who never consume the message.
 static inline bool ford_bp_init(uint16_t param_sp) {
   const uint16_t FORD_PARAM_SP_BP_LATERAL = 32;
   ford_bp_lateral = GET_FLAG(param_sp, FORD_PARAM_SP_BP_LATERAL);

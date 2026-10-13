@@ -318,7 +318,7 @@ static safety_config ford_init(uint16_t param) {
   // BluePilot: enforced only while the pinion angle_meas source is on (ford_bp_init)
   static RxCheck ford_rx_checks_pinion[] = {
     FORD_COMMON_RX_CHECKS
-    // checksum algorithm unknown: integrity via counter (0-15) + quality flag + 100 Hz check
+    // StePinAn_No_Cs matches no Ford checksum pattern on real frames: integrity via counter (0-15) + quality flag + 100 Hz
     {.msg = {{FORD_SteeringPinion_Data, 0, 8, 100U, .max_counter = 15U, .ignore_checksum = true}, { 0 }, { 0 }}},
   };
 

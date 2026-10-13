@@ -263,7 +263,7 @@ class LateralCurvExt:
     while its CAN quality flag still reads OK. The pinion angle (SteeringPinion_Data,
     PSCM) is an equivalent measurement, independently validated against the comma IMU
     (corr +0.99), and the panda safety angle_meas switches to the same source (see
-    safety/modes/ford.h) -- the layers always agree. angleOffsetDeg/roll come from
+    safety/bluepilot/ford.h) -- the layers always agree. angleOffsetDeg/roll come from
     liveParameters (paramsd, IMU-derived, not the car yaw sensor).
     """
     if self.bp_pinion_curvature_enabled:

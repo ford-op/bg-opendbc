@@ -3,7 +3,7 @@ BluePilot: shared harness for the Ford 4-signal lateral safety tests.
 
 Not a test module (no test_ prefix). Provides:
   * BPFordLateralModel: a Python mirror of the BluePilot curvature checks in
-    opendbc/safety/bluepilot/lateral.h (bp_curvature_rate_lookup_check) and the lateral
+    opendbc/safety/bluepilot/lateral.h (ford_bp_curvature_rate_lookup_check) and the lateral
     acceleration cap, computed with the same float32 arithmetic and rounding as the C, so the
     tests can assert exact CAN-unit boundaries on both x86 and ARM runners.
   * BPFordTestCase: unittest base that borrows upstream's Ford test class for its message
@@ -101,7 +101,7 @@ def c_fudged_speed(speed_ms: float, offset: float) -> np.float32:
 
 
 class BPFordLateralModel:
-  """Mirror of the BP curvature path in ford_bp_curvature_cmd_checks + bp_curvature_rate_lookup_check.
+  """Mirror of the BP curvature path in ford_bp_curvature_cmd_checks + ford_bp_curvature_rate_lookup_check.
 
   Speeds are what the C sees: vehicle_speed.min / max / values[0] in m/s (read back from
   libsafety after the rx messages so packer rounding is included).

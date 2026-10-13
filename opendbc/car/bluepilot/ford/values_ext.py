@@ -15,11 +15,11 @@ class FordSafetyFlagsSP:
 
   Carried in CP_SP.safetyParam and delivered to the safety firmware as
   current_safety_param_sp (the separate SP uint16, USB control 0xdf) -- NOT the main
-  safetyConfigs[].safetyParam. ford_init reads it with GET_FLAG(current_safety_param_sp,
+  safetyConfigs[].safetyParam. ford_bp_init reads it with GET_FLAG(current_safety_param_sp,
   ...), same pattern as Subaru STOP_AND_GO (subaru_common.h). Plain int constants, not
   IntFlag: CP_SP.safetyParam must stay a plain int through capnp serialization in card.
   """
-  # Bit layout of the SP safety param (mirrored in ford_init, modes/ford.h; pinned by
+  # Bit layout of the SP safety param (mirrored in ford_bp_init, safety/bluepilot/ford.h; pinned by
   # tests/test_safety_param_bits.py):
   #   bit 0    STEER_ANGLE_CURVATURE (pinion-sourced curvature measurement)
   #   bits 1-4 pinion geometry index (FORD_PINION_GEOMETRY_SHIFT / FORD_PINION_GEOMETRY_INDEX)
@@ -113,7 +113,7 @@ CURVATURE_MAX = 0.02
 # Control (Python) uses stricter windup than unwind so OP stays inside panda when apply_std
 # picks the wrong table vs ford_bp_curvature_cmd_checks. Safety firmware is looser than both: its
 # up table is the control's down table, and its down table is 1% looser again — see
-# safety/modes/ford.h FORD_LIMITS.
+# safety/bluepilot/ford.h FORD_LIMITS.
 _BP_ANGLE_RATE_UP = ([5, 16, 25], [0.0025, 0.0012, 0.00008])
 _BP_ANGLE_RATE_DOWN = ([5, 16, 25], [0.0025, 0.0014, 0.00018])
 BP_ANGLE_LIMITS = AngleSteeringLimits(

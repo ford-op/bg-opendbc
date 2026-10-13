@@ -42,7 +42,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
         self.assertEqual(expected, self._probe(desired, last_can))
 
   def test_curvature_rate_lookup_boundaries(self):
-    """Per-frame delta from the {5,16,25} m/s table (bp_curvature_rate_lookup_check), both
+    """Per-frame delta from the {5,16,25} m/s table (ford_bp_curvature_rate_lookup_check), both
     directions, both signs, exact boundary: the speed fudge and the delta arithmetic."""
     for speed in SPEEDS:
       self.set_meas(0, speed)
@@ -57,7 +57,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     """Above 10 m/s the command must stay within max_curvature_error of measured; when the last
     command is already outside the band it must move back toward it by at least the relaxed
     delta, and may not move further away. Below 10 m/s the band is off (the relaxed branches of
-    bp_curvature_rate_lookup_check). Seen in the car: a 4-frame block at 26 mph with the driver
+    ford_bp_curvature_rate_lookup_check). Seen in the car: a 4-frame block at 26 mph with the driver
     steering harder than the command, sitting exactly on this window's edge (#12)."""
     # measured both signs, and last commands on both sides of zero, so both relaxed branches run
     # with last commands of either sign. The C picks the up or down table by that sign, and the

@@ -27,7 +27,7 @@
 // ===============================
 
 // BluePilot: steering-angle curvature measurement (bad-yaw-sensor workaround). Index 0 of
-// ford_pinion_geometry is reserved as invalid; see ford_init in modes/ford.h.
+// ford_pinion_geometry is reserved as invalid; see ford_bp_init in ford.h.
 #define FORD_PINION_GEOMETRY_COUNT 12U
 // Row count including the reserved index-0 entry. Kept as a plain literal: the mutation
 // harness rewrites arithmetic in array sizes into runtime expressions, which cannot compile.
@@ -58,7 +58,7 @@
 
 // BluePilot: optional angle_meas source, measured curvature from the steering pinion angle
 // (PSCM) via the vehicle model, selected by the geometry index in current_safety_param_sp
-// bits 1-4. Default off = stock yaw-sourced angle_meas. See ford_init in modes/ford.h.
+// bits 1-4. Default off = stock yaw-sourced angle_meas. See ford_bp_init in ford.h.
 extern bool ford_bp_lateral;
 extern bool ford_bp_pinion_curvature;
 extern const AngleSteeringParams *ford_bp_pinion_params;
@@ -85,5 +85,11 @@ static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool
 // Shared curvature/curvature_rate/path_offset/path_angle command checks for LateralMotionControl
 // (CAN) and LateralMotionControl2 (CAN FD) -- see ford_lmc_checks in ford.h.
 static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
-                            bool steer_control_enabled, const FordBpCurvatureLimits *curvature_limits,
-                            const FordBpCurvatureLimits *curvature_limits_pinion, const char *dbg_prefix);
+                            bool steer_control_enabled, const FordBpCurvatureLimits *limits, const char *dbg_prefix);
+
+// The calls modes/ford.h makes, one per hook site -- see ford.h.
+static inline bool ford_bp_lmc_tx(bool canfd, unsigned int raw_curvature, unsigned int raw_curvature_rate,
+                                  unsigned int raw_path_angle, unsigned int raw_path_offset, bool steer_control_enabled);
+static inline void ford_bp_lka_tx(const CANPacket_t *msg);
+static inline void ford_bp_rx_hook(const CANPacket_t *msg);
+static inline bool ford_bp_init(uint16_t param_sp);

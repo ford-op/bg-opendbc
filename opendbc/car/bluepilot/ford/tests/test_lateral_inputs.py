@@ -94,6 +94,28 @@ class TestLateralInputs(unittest.TestCase):
     LateralCurvExt.update_inputs(fresh, empty)
     self.assertIsNone(fresh.model)
 
+  def test_non_finite_inputs_are_ignored(self):
+    # a NaN or inf anywhere in the frame -> frame ignored, previous inputs kept
+    for field, index in (("laneLineProbs", 1), ("laneLineStds", 2), ("pathYawRate", 5), ("pathY", 0), ("laneLineRightY", 32)):
+      for bad_value in (float("nan"), float("inf")):
+        ext = _Ext()
+        LateralCurvExt.update_inputs(ext, _cc_sp())
+        model, lp = ext.model, ext.lp
+        bad = _cc_sp()
+        values = list(getattr(bad.lateralInputs, field))
+        values[index] = bad_value
+        setattr(bad.lateralInputs, field, values)
+        LateralCurvExt.update_inputs(ext, bad)
+        self.assertIs(ext.model, model, field)
+        self.assertIs(ext.lp, lp, field)
+    for field in ("steerRatio", "lateralDelay"):
+      ext = _Ext()
+      LateralCurvExt.update_inputs(ext, _cc_sp())
+      bad = _cc_sp()
+      setattr(bad.lateralInputs, field, float("nan"))
+      LateralCurvExt.update_inputs(ext, bad)
+      self.assertEqual(ext.lp.steerRatio, 15.5, field)
+      self.assertEqual(ext.lateral_delay, 0.12, field)
 
 if __name__ == "__main__":
   unittest.main()

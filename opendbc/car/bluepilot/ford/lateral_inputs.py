@@ -2,17 +2,24 @@
 BluePilot: adapt CarControlSP.lateralInputs to the modelV2 / vehicleParameters shape the lateral
 code reads. The fork fills lateralInputs once per frame; nothing here touches messaging.
 """
+import math
+from itertools import chain
 from types import SimpleNamespace
 
 MODEL_PATH_POINTS = 33  # modelV2 orientationRate / position / laneLines length (ModelConstants.IDX_N)
 
 
 def lateral_inputs_complete(li) -> bool:
-  """True when every array the lateral indexes into has the shape modelV2 always provides."""
+  """True when every array the lateral indexes into has the shape modelV2 always provides, and
+  every value is finite. A NaN from the model doesn't raise in the lateral math; it reaches the
+  CAN encoders, which do, so the whole frame is dropped here and the previous inputs are kept."""
   return (len(li.pathYawRate) == MODEL_PATH_POINTS and len(li.pathX) == MODEL_PATH_POINTS and len(li.pathY) == MODEL_PATH_POINTS
           and len(li.laneLineLeftX) == MODEL_PATH_POINTS and len(li.laneLineLeftY) == MODEL_PATH_POINTS
           and len(li.laneLineRightX) == MODEL_PATH_POINTS and len(li.laneLineRightY) == MODEL_PATH_POINTS
-          and len(li.laneLineProbs) >= 3 and len(li.laneLineStds) >= 3)
+          and len(li.laneLineProbs) >= 3 and len(li.laneLineStds) >= 3
+          and all(map(math.isfinite, chain(li.pathYawRate, li.pathX, li.pathY, li.laneLineLeftX, li.laneLineLeftY,
+                                           li.laneLineRightX, li.laneLineRightY, li.laneLineProbs, li.laneLineStds,
+                                           (li.steerRatio, li.stiffnessFactor, li.roll, li.angleOffsetDeg, li.lateralDelay)))))
 
 
 class _LaneLine:

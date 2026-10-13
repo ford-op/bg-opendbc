@@ -55,7 +55,7 @@ class BPPinionMixin:
     return 1. / (1. - (self.PINION_SLIP_FACTOR * (speed ** 2))) / self.PINION_WHEELBASE
 
   def _curvature_to_pinion_angle_deg(self, curvature: float, speed: float) -> float:
-    # inverse of ford_rx_hook: curvature = angle_rad * curvature_factor(speed) / steer_ratio
+    # inverse of ford_bp_rx_hook: curvature = angle_rad * curvature_factor(speed) / steer_ratio
     return float(np.degrees(curvature * self.PINION_STEER_RATIO / self._curvature_factor(speed)))
 
   def _pinion_quant_tol(self, speed: float) -> int:

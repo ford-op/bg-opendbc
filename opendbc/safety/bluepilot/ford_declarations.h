@@ -65,7 +65,7 @@ extern const AngleSteeringParams *ford_bp_pinion_params;
 extern const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS];
 
 // BluePilot: angle_mode_engaged + shadow_curvature, read out of Lane_Assist_Data1's unused
-// bits inside ford_tx_hook (no separate CAN message, no RX -- see fordcan_ext.py's
+// bits by ford_bp_lka_tx (no separate CAN message, no RX -- see fordcan_ext.py's
 // create_lka_msg for the wire layout).
 extern bool ford_bp_angle_mode_engaged;
 extern int16_t ford_bp_shadow_curvature_raw;  // wire units, scale 1e-6 1/m (see fordcan_ext.py)
@@ -87,9 +87,9 @@ static inline bool ford_shadow_curvature_error_check(int desired_curvature, bool
 static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_rate, int desired_path_offset, int desired_path_angle,
                             bool steer_control_enabled, const FordBpCurvatureLimits *limits, const char *dbg_prefix);
 
-// The calls modes/ford.h makes, one per hook site -- see ford.h.
+// The calls modes/ford.h makes from its hooks -- see ford.h.
 static inline bool ford_bp_lmc_tx(bool canfd, unsigned int raw_curvature, unsigned int raw_curvature_rate,
-                                  unsigned int raw_path_angle, unsigned int raw_path_offset, bool steer_control_enabled);
+                                  unsigned int raw_path_offset, unsigned int raw_path_angle, bool steer_control_enabled);
 static inline void ford_bp_lka_tx(const CANPacket_t *msg);
 static inline void ford_bp_rx_hook(const CANPacket_t *msg);
 static inline bool ford_bp_init(uint16_t param_sp);

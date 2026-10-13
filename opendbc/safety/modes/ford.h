@@ -251,7 +251,7 @@ static bool ford_tx_hook(const CANPacket_t *msg) {
 
     bool violation = false;
     if (ford_bp_lateral) {  // BluePilot: 4-signal lateral
-      violation = ford_bp_lmc_tx(false, raw_curvature, raw_curvature_rate, raw_path_angle, raw_path_offset, steer_control_enabled);
+      violation = ford_bp_lmc_tx(false, raw_curvature, raw_curvature_rate, raw_path_offset, raw_path_angle, steer_control_enabled);
     } else {
       // These signals are not yet tested with the current safety limits
       violation = (raw_curvature_rate != FORD_INACTIVE_CURVATURE_RATE) || (raw_path_angle != FORD_INACTIVE_PATH_ANGLE) || (raw_path_offset != FORD_INACTIVE_PATH_OFFSET);
@@ -277,7 +277,7 @@ static bool ford_tx_hook(const CANPacket_t *msg) {
 
     bool violation = false;
     if (ford_bp_lateral) {  // BluePilot: 4-signal lateral
-      violation = ford_bp_lmc_tx(true, raw_curvature, raw_curvature_rate, raw_path_angle, raw_path_offset, steer_control_enabled);
+      violation = ford_bp_lmc_tx(true, raw_curvature, raw_curvature_rate, raw_path_offset, raw_path_angle, steer_control_enabled);
     } else {
       // These signals are not yet tested with the current safety limits
       violation = (raw_curvature_rate != FORD_CANFD_INACTIVE_CURVATURE_RATE) || (raw_path_angle != FORD_INACTIVE_PATH_ANGLE) || (raw_path_offset != FORD_INACTIVE_PATH_OFFSET);
@@ -315,14 +315,10 @@ static safety_config ford_init(uint16_t param) {
     FORD_COMMON_RX_CHECKS
   };
 
-  // BluePilot: only enforced when the pinion angle_meas source is enabled -- keeping this
-  // entry in the stock config would make a pinion hiccup disable controls for users who
-  // never consume the message.
+  // BluePilot: enforced only while the pinion angle_meas source is on (ford_bp_init)
   static RxCheck ford_rx_checks_pinion[] = {
     FORD_COMMON_RX_CHECKS
-    // Pinion angle (angle_meas source). Counter verified 0-15 on real frames.
-    // StePinAn_No_Cs checksum algorithm is unknown (Ford sum-invert patterns don't match
-    // real frames) -> ignore_checksum; integrity via counter + quality flag + 100Hz check.
+    // checksum algorithm unknown: integrity via counter (0-15) + quality flag + 100 Hz check
     {.msg = {{FORD_SteeringPinion_Data, 0, 8, 100U, .max_counter = 15U, .ignore_checksum = true}, { 0 }, { 0 }}},
   };
 

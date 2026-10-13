@@ -84,7 +84,7 @@ def init_ford_safety_param_sp(CP: structs.CarParams, CP_SP: structs.CarParamsSP,
 
     # The pinion-sourced measurement is a BP lateral feature: its wider error band and the
     # Python side's yaw-vs-pinion handling only line up on the BP path, so it is off whenever
-    # BP lateral is off (ford_init enforces the same on the panda).
+    # BP lateral is off (ford_bp_init enforces the same on the panda).
     steer_angle_curvature = bp_lateral and _param_bool(params_dict, "FordPrefSteerAngleCurvature")
     if steer_angle_curvature:
       geometry_index = FORD_PINION_GEOMETRY_INDEX.get(CP.carFingerprint)

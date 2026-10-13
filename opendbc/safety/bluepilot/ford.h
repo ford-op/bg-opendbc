@@ -307,7 +307,7 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
 // to signed CAN units (physical = raw * scale - offset), picks the limit set for the message and the
 // angle_meas source, and runs ford_lmc_checks.
 static inline bool ford_bp_lmc_tx(bool canfd, unsigned int raw_curvature, unsigned int raw_curvature_rate,
-                                  unsigned int raw_path_angle, unsigned int raw_path_offset, bool steer_control_enabled) {
+                                  unsigned int raw_path_offset, unsigned int raw_path_angle, bool steer_control_enabled) {
   // static inside the one function that reads them (MISRA 8.9)
   static const FordBpCurvatureLimits FORD_BP_STEERING_LIMITS = FORD_LIMITS(false, 100);
   static const FordBpCurvatureLimits FORD_BP_STEERING_LIMITS_PINION = FORD_LIMITS(false, 150);
@@ -316,12 +316,15 @@ static inline bool ford_bp_lmc_tx(bool canfd, unsigned int raw_curvature, unsign
 
   const FordBpCurvatureLimits *limits;
   unsigned int inactive_curvature_rate;
+  const char *dbg_prefix;
   if (canfd) {
     limits = ford_bp_pinion_curvature ? &FORD_CANFD_STEERING_LIMITS_PINION : &FORD_CANFD_STEERING_LIMITS;
     inactive_curvature_rate = FORD_CANFD_INACTIVE_CURVATURE_RATE;
+    dbg_prefix = "CANFD Out";
   } else {
     limits = ford_bp_pinion_curvature ? &FORD_BP_STEERING_LIMITS_PINION : &FORD_BP_STEERING_LIMITS;
     inactive_curvature_rate = FORD_INACTIVE_CURVATURE_RATE;
+    dbg_prefix = "CAN Out";
   }
 
   int desired_curvature = raw_curvature - FORD_INACTIVE_CURVATURE;
@@ -329,7 +332,7 @@ static inline bool ford_bp_lmc_tx(bool canfd, unsigned int raw_curvature, unsign
   int desired_path_offset = raw_path_offset - FORD_INACTIVE_PATH_OFFSET;
   int desired_path_angle = raw_path_angle - FORD_INACTIVE_PATH_ANGLE;
   return ford_lmc_checks(desired_curvature, desired_curvature_rate, desired_path_offset, desired_path_angle,
-                         steer_control_enabled, limits, canfd ? "CANFD Out" : "CAN Out");
+                         steer_control_enabled, limits, dbg_prefix);
 }
 
 // BluePilot: angle_mode_engaged and shadow_curvature ride in Lane_Assist_Data1 bits with no DBC
@@ -372,7 +375,10 @@ static inline void ford_bp_rx_hook(const CANPacket_t *msg) {
 // geometry index, 5 BP 4-signal lateral (clear = upstream's stock lateral safety, verbatim). A zero
 // or out-of-range index disables the pinion source, so a half-configured param can never select the
 // wrong geometry: the stock yaw path is kept. Returns whether the pinion source is on, i.e. whether
-// ford_init applies the pinion RX check (enforced only when the message is consumed).
+// ford_init applies the pinion RX check. That check stays out of the stock config, so a pinion
+// hiccup can't disable controls for users who never consume the message. StePinAn_No_Cs doesn't
+// match Ford's sum-invert checksum patterns on real frames, so the check ignores it; the counter
+// (verified 0-15 on real frames), quality flag and 100 Hz rate carry the integrity.
 static inline bool ford_bp_init(uint16_t param_sp) {
   const uint16_t FORD_PARAM_SP_BP_LATERAL = 32;
   ford_bp_lateral = GET_FLAG(param_sp, FORD_PARAM_SP_BP_LATERAL);

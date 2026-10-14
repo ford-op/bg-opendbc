@@ -610,3 +610,4 @@ SECOC_CAR = CAR.with_flags(ToyotaFlags.SECOC)
 NO_STOP_TIMER_CAR = CAR.with_flags(ToyotaFlags.NO_STOP_TIMER)
 
 DBC = CAR.create_dbc_map()
+# temporary: proves bluepilot-hooks fails on an unlisted upstream edit (reverted next)

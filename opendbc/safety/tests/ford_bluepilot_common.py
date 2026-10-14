@@ -3,7 +3,7 @@ BluePilot: shared harness for the Ford 4-signal lateral safety tests.
 
 Not a test module (no test_ prefix). Provides:
   * BPFordLateralModel: a Python mirror of the BluePilot curvature checks in
-    opendbc/safety/bluepilot/lateral.h (ford_bp_curvature_rate_lookup_check) and the lateral
+    opendbc/bluepilot_lateral/safety/lateral.h (ford_bp_curvature_rate_lookup_check) and the lateral
     acceleration cap, computed with the same float32 arithmetic and rounding as the C, so the
     tests can assert exact CAN-unit boundaries on both x86 and ARM runners.
   * BPFordTestCase: unittest base that borrows upstream's Ford test class for its message
@@ -18,7 +18,7 @@ import numpy as np
 
 from opendbc.car.structs import CarParams
 from opendbc.car.ford.values import FordSafetyFlags
-from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
 from opendbc.safety.tests.libsafety import libsafety_py
 from opendbc.safety.tests.common import CANPackerSafety
 from opendbc.safety.tests import test_ford  # module import keeps its test classes out of discovery here
@@ -31,7 +31,7 @@ def c_int(v) -> int:
   return int(np.trunc(float(v)))
 
 
-# --- constants mirrored from the C (opendbc/safety/modes/ford.h, bluepilot/*.h, lateral.h) ---
+# --- constants mirrored from the C (opendbc/safety/modes/ford.h, opendbc/bluepilot_lateral/safety/*.h, lateral.h) ---
 CURVATURE_TO_CAN = 50000.0          # FORD_LIMITS .curvature_to_can
 FORD_CURVATURE_MAX = 0.02           # rad/m, FORD_CURVATURE_MAX in ford_declarations.h
 MAX_CURVATURE_CAN = c_int(f32(FORD_CURVATURE_MAX) * f32(CURVATURE_TO_CAN))  # FORD_LIMITS .max_curvature, 1000
@@ -181,10 +181,10 @@ _GEOMETRY_ROW = re.compile(rf"\{{\.slip_factor = (?P<slip>{_NUM})f, \.steer_rati
 
 
 def pinion_geometry_table() -> dict[int, tuple[float, float, float]]:
-  """ford_pinion_geometry from opendbc/safety/bluepilot/ford.h as {index: (slip_factor, steer_ratio,
+  """ford_pinion_geometry from opendbc/bluepilot_lateral/safety/ford.h as {index: (slip_factor, steer_ratio,
   wheelbase)}. Read from source: libsafety exposes no getters for it and adding some would touch
   upstream's harness."""
-  bp = Path(__file__).resolve().parents[1] / "bluepilot"
+  bp = Path(__file__).resolve().parents[2] / "bluepilot_lateral" / "safety"
   src = (bp / "ford.h").read_text()
   body = src[src.index("ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS] = {"):]
   body = body[:body.index("};")]

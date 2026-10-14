@@ -4,7 +4,7 @@ BluePilot Ford lateral: the pinion-sourced curvature measurement (STEER_ANGLE_CU
 
 With bit 0 of the SP safety param set (and BP_LATERAL, which it requires), the panda measures
 curvature from the PSCM steering pinion angle through the per-platform geometry table in
-bluepilot/ford.h instead of the RCM yaw rate, and widens the error band to 150 CAN units.
+bluepilot_lateral/safety/ford.h instead of the RCM yaw rate, and widens the error band to 150 CAN units.
 The geometry index rides bits 1-4. Ported from BluePilot's earlier vendored tests onto the
 BP matrix classes; the geometry-table check reads the C table from source (no libsafety
 getters), so no upstream harness file is touched.
@@ -17,10 +17,10 @@ from opendbc.car import scale_tire_stiffness
 from opendbc.car.ford.values import CAR
 from opendbc.car.structs import CarParams
 from opendbc.car.vehicle_model import VehicleModel, calc_slip_factor
-from opendbc.car.bluepilot.ford.values_ext import (
+from opendbc.bluepilot_lateral.core.values_ext import (
   FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, FORD_PINION_WHEELBASE,
 )
-from opendbc.car.bluepilot.ford.lateral_curv_ext import pinion_vehicle_model
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import pinion_vehicle_model
 from opendbc.car.ford.interface import CarInterface
 from opendbc.safety.tests.ford_bluepilot_common import (
   CURVATURE_TO_CAN, CURVATURE_ERROR_MIN_SPEED, MAX_CURVATURE_ERROR_CAN_PINION, pinion_geometry_table,

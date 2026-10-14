@@ -3,11 +3,11 @@ import unittest
 from pathlib import Path
 
 from opendbc.car import structs
-from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, \
+from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, \
   init_ford_safety_param_sp
 from opendbc.car.ford.values import CAR
 
-SAFETY = Path(__file__).resolve().parents[4] / "safety"
+SAFETY = Path(__file__).resolve().parents[1] / "safety"
 
 
 def _c_const(text, name):
@@ -20,8 +20,8 @@ class TestSafetyParamBits(unittest.TestCase):
   Pin them to each other and to non-overlap."""
 
   def test_python_and_c_agree(self):
-    ford_h = (SAFETY / "bluepilot" / "ford.h").read_text()
-    decl_h = (SAFETY / "bluepilot" / "ford_declarations.h").read_text()
+    ford_h = (SAFETY / "ford.h").read_text()
+    decl_h = (SAFETY / "ford_declarations.h").read_text()
     self.assertEqual(_c_const(ford_h, "FORD_PARAM_SP_BP_LATERAL"), FordSafetyFlagsSP.BP_LATERAL)
     self.assertEqual(_c_const(ford_h, "FORD_PARAM_SP_STEER_ANGLE_CURVATURE"), FordSafetyFlagsSP.STEER_ANGLE_CURVATURE)
     self.assertGreaterEqual(_c_const(decl_h, "#define FORD_PINION_GEOMETRY_COUNT"), max(FORD_PINION_GEOMETRY_INDEX.values()))

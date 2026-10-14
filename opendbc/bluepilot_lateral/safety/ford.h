@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "opendbc/safety/bluepilot/ford_declarations.h"
-#include "opendbc/safety/bluepilot/lateral.h"
+#include "opendbc/bluepilot_lateral/safety/ford_declarations.h"
+#include "opendbc/bluepilot_lateral/safety/lateral.h"
 
 // ===============================
 // Global Variables
@@ -19,7 +19,7 @@ const AngleSteeringParams *ford_bp_pinion_params = &ford_pinion_geometry[0];
 // BluePilot: per-platform geometry for pinion-angle -> curvature conversion (the optional
 // angle_meas source), selected by the 4-bit geometry index in current_safety_param_sp
 // bits 1-4. Row order and values must match FORD_PINION_GEOMETRY_INDEX in
-// opendbc/car/bluepilot/ford/values_ext.py (enforced by test_ford_bluepilot_pinion.py's
+// opendbc/bluepilot_lateral/core/values_ext.py (enforced by test_ford_bluepilot_pinion.py's
 // geometry test against CarSpecs + calc_slip_factor(VehicleModel(CP)), with the wheelbase
 // overrides in FORD_PINION_WHEELBASE applied).
 // Index 0 is reserved as invalid; ford_bp_init disables the feature outright on a zero or

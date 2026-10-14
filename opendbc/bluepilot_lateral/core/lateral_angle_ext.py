@@ -38,11 +38,11 @@ from numpy import clip, interp
 from opendbc.car import DT_CTRL
 from opendbc.car.lateral import apply_std_steer_angle_limits
 from opendbc.car.ford.values import CAR, CarControllerParams
-from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralResult
-from opendbc.car.bluepilot.ford.human_turn import HumanTurnDetector
-from opendbc.car.bluepilot.ford.lane_center_trim import LaneCenterTrim
-from opendbc.car.bluepilot.ford.values_ext import BP_ANGLE_LIMITS
-from opendbc.car.bluepilot.ford.values_ext import MODEL_T_IDXS
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralResult
+from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
+from opendbc.bluepilot_lateral.core.lane_center_trim import LaneCenterTrim
+from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS
+from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
 
 # Hard-coded per-platform gain defaults.
 # CAN vehicles (Escape MK4, Bronco Sport, Explorer, Maverick, Edge)

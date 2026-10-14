@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "opendbc/safety/bluepilot/lateral_declarations.h"
+#include "opendbc/bluepilot_lateral/safety/lateral_declarations.h"
 
 // BluePilot: measured-table rate limiting. This is the pre-sync steer_angle_cmd_checks logic,
 // carried over verbatim in the curvature domain so Ford lateral behavior is unchanged by the

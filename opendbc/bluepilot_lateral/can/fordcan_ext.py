@@ -3,7 +3,7 @@ BluePilot Ford CAN message builder extensions (lateral only).
 
 Extended versions of the stock fordcan.py lateral builders:
   - Dynamic ramp_type and precision_type for the 4-signal lateral commands
-  - Lane_Assist_Data1 carries the angle-mode side channel read by opendbc/safety/bluepilot/ford.h
+  - Lane_Assist_Data1 carries the angle-mode side channel read by opendbc/bluepilot_lateral/safety/ford.h
 
 Trimmed for the lateral proof-of-concept: the longitudinal, HUD and ICBM builders from
 BluePilot's fordcan_ext.py are out of scope here.

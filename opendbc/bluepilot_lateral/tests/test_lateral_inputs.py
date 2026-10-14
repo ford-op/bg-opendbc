@@ -1,8 +1,8 @@
 import unittest
 
 from opendbc.car import structs
-from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt
-from opendbc.car.bluepilot.ford.values_ext import MODEL_T_IDXS
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt
+from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
 
 
 def _cc_sp(valid=True):

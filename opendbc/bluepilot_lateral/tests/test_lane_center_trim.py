@@ -7,7 +7,7 @@ import unittest
 
 import numpy as np
 
-from opendbc.car.bluepilot.ford.lane_center_trim import LaneCenterTrim, _CORRECTION_ROC_PER_TICK
+from opendbc.bluepilot_lateral.core.lane_center_trim import LaneCenterTrim, _CORRECTION_ROC_PER_TICK
 
 
 class _XY:

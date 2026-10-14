@@ -10,7 +10,7 @@ import unittest
 
 from opendbc.car.structs import CarParams
 from opendbc.car.ford.values import FordSafetyFlags
-from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
 from opendbc.safety.tests.libsafety import libsafety_py
 from opendbc.safety.tests.common import CANPackerSafety
 from opendbc.safety.tests import test_ford  # module import: keeps its test classes out of this module's discovery

@@ -5,7 +5,7 @@ from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, Bus, DT_CTRL, apply_hystere
 from opendbc.car.ford import fordcan
 from opendbc.car.ford.values import CarControllerParams, FordFlags, CAR
 from opendbc.car.interfaces import CarControllerBase, V_CRUISE_MAX
-from opendbc.car.bluepilot.ford.carcontroller_ext import BluePilotLateral  # BluePilot
+from opendbc.bluepilot_lateral.core.carcontroller_ext import BluePilotLateral  # BluePilot
 
 LongCtrlState = structs.CarControl.Actuators.LongControlState
 VisualAlert = structs.CarControl.HUDControl.VisualAlert

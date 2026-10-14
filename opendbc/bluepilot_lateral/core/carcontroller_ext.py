@@ -11,11 +11,11 @@ continues from the last command, as before.
 """
 
 from opendbc.car.ford.values import CarControllerParams, FordFlags
-from opendbc.car.bluepilot.ford import fordcan_ext
-from opendbc.car.bluepilot.ford.lateral_angle_ext import LateralAngleExt
-from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param
-from opendbc.car.bluepilot.ford.param_store import ParamStore
-from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.can import fordcan_ext
+from opendbc.bluepilot_lateral.core.lateral_angle_ext import LateralAngleExt
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param
+from opendbc.bluepilot_lateral.params.param_store import ParamStore
+from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
 
 
 class BluePilotLateral(LateralCurvExt, LateralAngleExt):
@@ -90,7 +90,7 @@ class BluePilotLateral(LateralCurvExt, LateralAngleExt):
 
   def step_lka(self, CC, hud_control):
     """At LKA_STEP: the Lane_Assist_Data1 message."""
-    # BluePilot: tell safety/bluepilot/ford.h whether angle mode is engaged, packed into
+    # BluePilot: tell bluepilot_lateral/safety/ford.h whether angle mode is engaged, packed into
     # Lane_Assist_Data1's unused bits. shadow_curvature is negated to match the
     # path_angle/apply_curvature wire convention that ford.h's angle_meas is calibrated against.
     # The disable_BP_lat_UI check always passes here (step_lka only runs while BluePilot lateral is

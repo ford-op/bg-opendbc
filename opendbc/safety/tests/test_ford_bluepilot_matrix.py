@@ -17,7 +17,7 @@ stock assertions the 4-signal lateral changes on purpose are replaced:
 import unittest
 
 import opendbc.safety.tests.common as common
-from opendbc.car.bluepilot.ford.values_ext import FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
 from opendbc.safety.tests import test_ford
 from opendbc.safety.tests.ford_bluepilot_common import (
   BPFordLateralModel, CURVATURE_TO_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_SIGNAL_MAX_CAN,

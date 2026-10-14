@@ -28,10 +28,10 @@ from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, scale_rot_inertia, scale_ti
 from opendbc.car.lateral import ISO_LATERAL_ACCEL, apply_std_steer_angle_limits
 from opendbc.car.vehicle_model import VehicleModel
 from opendbc.car.ford.values import CarControllerParams, FordFlags
-from opendbc.car.bluepilot.ford.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, FORD_PINION_WHEELBASE, FordSafetyFlagsSP
-from opendbc.car.bluepilot.ford.human_turn import HumanTurnDetector
-from opendbc.car.bluepilot.ford.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
-from opendbc.car.bluepilot.ford.values_ext import MODEL_T_IDXS
+from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, FORD_PINION_WHEELBASE, FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
+from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
+from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
 
 
 class PrimaryLateralControl(IntEnum):
@@ -263,7 +263,7 @@ class LateralCurvExt:
     while its CAN quality flag still reads OK. The pinion angle (SteeringPinion_Data,
     PSCM) is an equivalent measurement, independently validated against the comma IMU
     (corr +0.99), and the panda safety angle_meas switches to the same source (see
-    safety/bluepilot/ford.h) -- the layers always agree. angleOffsetDeg/roll come from
+    bluepilot_lateral/safety/ford.h) -- the layers always agree. angleOffsetDeg/roll come from
     liveParameters (paramsd, IMU-derived, not the car yaw sensor).
     """
     if self.bp_pinion_curvature_enabled:

@@ -19,7 +19,7 @@ class FordSafetyFlagsSP:
   ...), same pattern as Subaru STOP_AND_GO (subaru_common.h). Plain int constants, not
   IntFlag: CP_SP.safetyParam must stay a plain int through capnp serialization in card.
   """
-  # Bit layout of the SP safety param (mirrored in ford_bp_init, safety/bluepilot/ford.h; pinned by
+  # Bit layout of the SP safety param (mirrored in ford_bp_init, bluepilot_lateral/safety/ford.h; pinned by
   # tests/test_safety_param_bits.py):
   #   bit 0    STEER_ANGLE_CURVATURE (pinion-sourced curvature measurement)
   #   bits 1-4 pinion geometry index (FORD_PINION_GEOMETRY_SHIFT / FORD_PINION_GEOMETRY_INDEX)
@@ -31,7 +31,7 @@ class FordSafetyFlagsSP:
 
 # Geometry-table index for the steering-angle curvature measurement, packed into
 # CP_SP.safetyParam bits 1-4 when STEER_ANGLE_CURVATURE is set. Must match the
-# ford_pinion_geometry table in safety/bluepilot/ford.h row for row.
+# ford_pinion_geometry table in bluepilot_lateral/safety/ford.h row for row.
 # Index 0 is reserved as invalid: the firmware treats flag-set-but-no-index as feature
 # off, so a half-configured param can never select the wrong geometry silently.
 # FORD_EDGE_MK2 is deliberately absent: ALT_STEER_ANGLE platforms read a RELATIVE pinion
@@ -93,7 +93,7 @@ def init_ford_safety_param_sp(CP: structs.CarParams, CP_SP: structs.CarParamsSP,
 
 
 # Pinion geometry wheelbase (m) where BluePilot deliberately differs from CarSpecs. Used by both the
-# C table (ford_pinion_geometry in safety/bluepilot/ford.h) and the Python pinion path
+# C table (ford_pinion_geometry in bluepilot_lateral/safety/ford.h) and the Python pinion path
 # (lateral_curv_ext.pinion_vehicle_model), so the two layers convert pinion angle the same way.
 # FORD_F_150_MK14: the trucks with lane centering come in 3.68 and 3.99 m wheelbases and nothing on
 # the car tells them apart; the average keeps either within about 4% (#21).
@@ -113,7 +113,7 @@ CURVATURE_MAX = 0.02
 # Control (Python) uses stricter windup than unwind so OP stays inside panda when apply_std
 # picks the wrong table vs ford_bp_curvature_cmd_checks. Safety firmware is looser than both: its
 # up table is the control's down table, and its down table is 1% looser again — see
-# safety/bluepilot/ford.h FORD_LIMITS.
+# bluepilot_lateral/safety/ford.h FORD_LIMITS.
 _BP_ANGLE_RATE_UP = ([5, 16, 25], [0.0025, 0.0012, 0.00008])
 _BP_ANGLE_RATE_DOWN = ([5, 16, 25], [0.0025, 0.0014, 0.00018])
 BP_ANGLE_LIMITS = AngleSteeringLimits(

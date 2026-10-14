@@ -1,9 +1,9 @@
 import unittest
 
 from opendbc.car import structs
-from opendbc.car.bluepilot.ford.param_store import ParamStore
-from opendbc.car.bluepilot.ford.lateral_curv_ext import LateralCurvExt, _read_param
-from opendbc.car.bluepilot.ford.values_ext import BP_LATERAL_PARAMS
+from opendbc.bluepilot_lateral.params.param_store import ParamStore
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, _read_param
+from opendbc.bluepilot_lateral.core.values_ext import BP_LATERAL_PARAMS
 
 
 def _cc_sp(**kv):

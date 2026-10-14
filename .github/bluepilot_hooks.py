@@ -30,7 +30,7 @@ def main() -> int:
   for path in sorted(listed - changed):
     print(f"::warning file={HOOK_LIST}::{path} isn't an upstream file that differs from master: remove it from the hook list")
   unlisted = sorted(changed - listed)
-  fix = "move the change under bluepilot/, or add the file to the list with its reason"
+  fix = "move the change under opendbc/bluepilot_lateral/, or add the file to the list with its reason"
   for path in unlisted:
     print(f"::error file={path}::{path} differs from master but isn't on the hook list ({HOOK_LIST}): {fix}")
   if not unlisted:

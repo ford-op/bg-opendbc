@@ -103,7 +103,7 @@ static const CurvatureSteeringLimits FORD_STEERING_LIMITS = {
 
 // BluePilot: the Ford 4-signal lateral checks, pinion angle_meas source and angle-mode state
 // cppcheck-suppress misra-c2012-20.1; needs the Ford constants defined above
-#include "opendbc/safety/bluepilot/ford.h"
+#include "opendbc/bluepilot_lateral/safety/ford.h"
 
 static void ford_rx_hook(const CANPacket_t *msg) {
   if (msg->bus == FORD_MAIN_BUS) {

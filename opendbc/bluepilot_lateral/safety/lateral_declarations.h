@@ -27,7 +27,7 @@ typedef struct {
 static inline bool ford_bp_curvature_rate_lookup_check(int desired_curvature, const FordBpCurvatureLimits *limits);
 
 // BluePilot: curvature command checks for the BluePilot lateral (Ford only today, see the
-// FORD_LIMITS macro in opendbc/safety/bluepilot/ford.h). Upstream's steer_curvature_cmd_checks with
+// FORD_LIMITS macro in opendbc/bluepilot_lateral/safety/ford.h). Upstream's steer_curvature_cmd_checks with
 // the measured-table check in place of its ISO accel and jerk checks.
 static inline bool ford_bp_curvature_cmd_checks(int desired_curvature, bool steer_control_enabled,
                                                 const FordBpCurvatureLimits *limits);

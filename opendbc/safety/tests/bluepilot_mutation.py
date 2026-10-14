@@ -10,14 +10,13 @@ from opendbc.safety.tests import mutation
 
 mutation.SAFETY_DIR = mutation.ROOT / "opendbc" / "bluepilot_lateral" / "safety"
 
-# TODO(#54): kill these and delete the list. They survive the whole safety suite (upstream's full run
-# miscounted them as killed: which mutants share a worker changes the result); mutation.py keeps its own
-# list inside main(), so these are skipped instead.
+# Equivalent mutants: no test can kill them, so they are skipped (mutation.py keeps its own list inside
+# main()). ford.h's +-0.02 range check in ford_lmc_checks is the same +-1000 CAN cap as lateral.h's
+# max_curvature check, which blocks every frame it would (its steering-off and controls-not-allowed
+# checks cover the rest), and the range check writes no state (only ford_bp_curvature_cmd_checks
+# resets desired_last). It stays as the backstop if a platform's max_curvature ever differs, and a
+# test can reach it then.
 KNOWN_SURVIVORS = {
-  ("opendbc/bluepilot_lateral/safety/lateral.h", 88, "|=", "&="),
-  ("opendbc/bluepilot_lateral/safety/lateral.h", 100, "0", "1"),
-  ("opendbc/bluepilot_lateral/safety/ford.h", 85, "-", "+"),
-  ("opendbc/bluepilot_lateral/safety/ford.h", 128, "0", "1"),
   ("opendbc/bluepilot_lateral/safety/ford.h", 197, "|=", "&="),
 }
 
@@ -31,9 +30,9 @@ def key(site):
 def enumerate_sites(input_source, preprocessed_file):
   sites, counts, build_incompatible_ids, source = _enumerate_sites(input_source, preprocessed_file)
   skipped = [s for s in sites if key(s) in KNOWN_SURVIVORS]
-  assert len(skipped) == len(KNOWN_SURVIVORS), f"a known survivor moved or is gone: {sorted(KNOWN_SURVIVORS - {key(s) for s in skipped})}"
+  assert len(skipped) == len(KNOWN_SURVIVORS), f"an equivalent mutant moved or is gone: {sorted(KNOWN_SURVIVORS - {key(s) for s in skipped})}"
   for s in skipped:
-    print(f"skipping known survivor (#54): {key(s)[0]}:{s.origin_line} [{s.mutator}] {s.original_op}->{s.mutated_op}", flush=True)
+    print(f"skipping equivalent mutant: {key(s)[0]}:{s.origin_line} [{s.mutator}] {s.original_op}->{s.mutated_op}", flush=True)
   return [s for s in sites if key(s) not in KNOWN_SURVIVORS], counts, build_incompatible_ids, source
 
 

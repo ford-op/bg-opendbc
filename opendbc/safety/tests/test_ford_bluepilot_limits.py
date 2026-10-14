@@ -131,6 +131,17 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
       self.assertTrue(self._probe(sign * MAX_CURVATURE_CAN, sign * MAX_CURVATURE_CAN))
       self.assertFalse(self._probe(sign * (MAX_CURVATURE_CAN + 1), sign * MAX_CURVATURE_CAN))
 
+  def test_over_cap_frame_resets_last(self):
+    """A frame past the 0.02 cap resets desired_last to 0 (ford_bp_curvature_cmd_checks' own cap), so
+    the next frame at the cap is a jump from 0 past the rate limit. ford_lmc_checks' range check blocks
+    the over-cap frame either way; only the cap in ford_bp_curvature_cmd_checks resets. At 5 m/s the
+    band is off and the CAN FD accel cap is far above 0.02. Positive only: the signal's minimum is
+    -0.02 exactly (11 bits unsigned, offset -0.02), so -1001 wraps to +1047 on the wire."""
+    self.set_meas(0.02, 5.0)
+    self.assertLess(self.model.rate_delta(self.speeds()[0]), MAX_CURVATURE_CAN)
+    self.assertFalse(self._probe(MAX_CURVATURE_CAN + 1, MAX_CURVATURE_CAN))
+    self.assertFalse(self.tx(self.lat(True, 0, SMALL_ANGLE, MAX_CURVATURE_CAN / CURVATURE_TO_CAN, 0)))
+
   def test_signals_zero_when_steer_disabled(self):
     """With LatCtl_D2_Rq = 0 every signal must be zero (path_angle/path_offset_cmd_checks, the
     curvature-rate check and ford_bp_curvature_cmd_checks), each on its own and in combination."""
@@ -143,6 +154,9 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     self.assertFalse(self.tx(self.lat(False, 0, 0, 0.001, 0)))
     self.assertFalse(self.tx(self.lat(False, 0.1, 0, 0.001, 0)))
     self.assertFalse(self.tx(self.lat(False, 0, 0, 0.001, 0.0001)))
+    # one CAN unit of curvature: the curvature-must-be-0 check is the only one that blocks it
+    for sign in (1, -1):
+      self.assertFalse(self.tx(self.lat(False, 0, 0, sign / CURVATURE_TO_CAN, 0)))
     # the all-zero disabled frame is the one thing allowed
     self.assertTrue(self.tx(self.lat(False, 0, 0, 0, 0)))
 
@@ -181,6 +195,21 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
       with self.subTest(window=window, newest=newest):
         self.assertEqual(not expect_blocked, self.model.allowed(out_of_band, last, m_min, m_max, v_min, v_max, newest))
         self.assertEqual(not expect_blocked, self._probe(out_of_band, last))
+
+  def test_newest_speed_sample_gates_the_shadow_check(self):
+    """Angle mode's shadow-curvature check (ford_shadow_curvature_error_check) also switches on
+    vehicle_speed.values[0], the newest sample: older samples at 9.5 m/s and the newest at 10.5: on;
+    the reverse: off. 0.5 m/s either side keeps clear of speed_mismatch_check's 2 m/s limit."""
+    below, above = CURVATURE_ERROR_MIN_SPEED - 0.5, CURVATURE_ERROR_MIN_SPEED + 0.5
+    for window, newest, expect_blocked in ((below, above, True), (above, below, False)):
+      self.set_meas(0, window)
+      self.rx(self.stock._speed_msg(newest))
+      _, m_max = self.meas()
+      out_of_band = m_max + MAX_CURVATURE_ERROR_CAN + 2  # one past highest_allowed in the C
+      self.tx(self.lka_bp_status_msg(True, out_of_band / CURVATURE_TO_CAN))
+      with self.subTest(window=window, newest=newest):
+        self.assertEqual(not expect_blocked, self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0)))
+    self.tx(self.lka_bp_status_msg(False, 0.0))
 
   def test_zero_curvature_skips_curvature_checks(self):
     """Curvature == 0 (angle mode's sentinel) discards the curvature checks' result; only the
@@ -343,8 +372,9 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     return self.tx(self.lat(True, offset_can / PATH_OFFSET_TO_CAN, SMALL_ANGLE, self.TINY_CURVATURE_CAN / CURVATURE_TO_CAN, 0))
 
   def test_path_offset_range_and_roc(self):
-    """Per-frame ROC from the {5,15,25} table (path_offset_cmd_checks) and the +-1.0 m range."""
-    for speed in (3.0, 8.0, 12.0, 20.0, 25.0):
+    """Per-frame ROC from the {5,15,25} table (path_offset_cmd_checks) and the +-1.0 m range.
+    At 9 m/s the speed fudge's sign decides the limit (5 with v - 1, 4 with v + 1)."""
+    for speed in (3.0, 8.0, 9.0, 12.0, 20.0, 25.0):
       self.set_meas(0, speed)
       v_min, _ = self.speeds()
       delta = angle_roc_delta(PATH_OFFSET_LOOKUP_X, PATH_OFFSET_LOOKUP_Y, PATH_OFFSET_TO_CAN, v_min)

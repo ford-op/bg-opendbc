@@ -3,7 +3,7 @@
 
 Compares the end state (a PR's merge result in CI), not the files a PR touched, so the nightly sync
 PR and the PR resolving a sync conflict pass as long as bg-clean differs from master only by hooks.
-usage: bluepilot_hooks.py <master ref> [<tree ref>, default HEAD]"""
+usage: bluepilot_hooks.py <master ref> [<merge result ref>, default HEAD]"""
 import subprocess
 import sys
 
@@ -19,7 +19,10 @@ def listed_hooks(text: str) -> set[str]:
 
 
 def main() -> int:
-  base, head = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "HEAD")
+  master, head = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "HEAD")
+  # the master commit the merge result contains: the nightly job moves master ahead of bg-clean until
+  # its sync PR is merged, and upstream's new changes must not count against other PRs meanwhile
+  base = git("merge-base", master, head).strip()
   # --no-renames: a moved upstream file shows as its deleted path; T: a type change (e.g. to a symlink)
   changed = set(git("diff", "-z", "--no-renames", "--name-only", "--diff-filter=MDT", base, head).split("\0")) - {""}
   listed = listed_hooks(git("show", f"{head}:{HOOK_LIST}"))

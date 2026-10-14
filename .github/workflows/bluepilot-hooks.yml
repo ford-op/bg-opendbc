@@ -18,5 +18,7 @@ jobs:
     timeout-minutes: 5
     steps:
     - uses: actions/checkout@v7
-    - run: git fetch --no-tags --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+      with:
+        fetch-depth: 0  # full history: the check diffs against the merge base with master
+    - run: git fetch --no-tags origin +refs/heads/master:refs/remotes/origin/master
     - run: python3 .github/bluepilot_hooks.py origin/master

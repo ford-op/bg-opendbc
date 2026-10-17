@@ -28,7 +28,6 @@ from opendbc.car.lateral import ISO_LATERAL_ACCEL, apply_std_steer_angle_limits
 from opendbc.car.vehicle_model import VehicleModel
 from opendbc.car.ford.values import CarControllerParams, FordFlags
 from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, FORD_PINION_WHEELBASE
-from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
 
 
@@ -148,11 +147,8 @@ class LateralCurvExt:
     self.enable_lane_positioning_curv = False
     self.custom_profile_curv = 0
 
-    # Precision/ramp control
-    self.precision_type = 1  # 1=Precise, 0=Comfortable
+    # Precision/ramp control (precision_type is in the shared state)
     self.lateralUncertainty = 0.0
-    # BluePilot: deviation-from-current-curvature telemetry (see carcontroller.py)
-    self.bp_curvature_deviation_limited = False
 
     # Predicted curvature blending
     self.curvature_lookup_time = 0.2  # seconds into the future for curvature extraction
@@ -177,8 +173,7 @@ class LateralCurvExt:
     self.max_path_angle_change = 0.00125
     self.max_path_offset_change = 0.00125
 
-    # Human turn detection (shared with angle mode — see human_turn.HumanTurnDetector)
-    self.human_turn_detector = HumanTurnDetector()
+    # Human turn detection (the detector is in the shared state, used by both modes)
     self.human_turn = False
     self.post_reset_ramp_active = False
     self.reset_steering_last = False
@@ -211,7 +206,6 @@ class LateralCurvExt:
 
     # Previous frame values
     self.path_offset_last = 0.0
-    self.path_angle_last = 0.0
 
   def update_lateral_params(self, params):
     """Read lateral-related Params from the UI. Called each frame."""
@@ -252,7 +246,7 @@ class LateralCurvExt:
     curvature_deviation_limited = False
 
     if CC.latActive:
-      self.precision_type = 1
+      self.shared.precision_type = 1
       steeringPressed = CS.out.steeringPressed
       steeringAngleDeg_PV = CS.out.steeringAngleDeg
 
@@ -292,13 +286,13 @@ class LateralCurvExt:
       if self.lane_change and self.inputs.model is not None:
         if self.inputs.model.meta.laneChangeDirection == 1 and requested_curvature < 0:
           requested_curvature *= lane_change_factor
-          self.precision_type = 0
+          self.shared.precision_type = 0
         elif self.inputs.model.meta.laneChangeDirection == 2 and requested_curvature > 0:
           requested_curvature *= lane_change_factor
-          self.precision_type = 0
+          self.shared.precision_type = 0
 
       # Human turn: sustained hands-on + large angle (not just a nudge) — see HumanTurnDetector
-      self.human_turn = self.human_turn_detector.update(
+      self.human_turn = self.shared.human_turn_detector.update(
         self.enable_human_turn_detection_curv, steeringPressed, steeringAngleDeg_PV)
 
       # Steering reset logic
@@ -380,7 +374,7 @@ class LateralCurvExt:
 
       # Rate limit path angle for comfort
       path_angle_roc = interp(abs(CS.out.vEgoRaw), self.LC_path_angle_ROC_bp, self.LC_path_angle_ROC_v)
-      path_angle_low_c = clip(path_angle_low_c, self.path_angle_last - path_angle_roc, self.path_angle_last + path_angle_roc)
+      path_angle_low_c = clip(path_angle_low_c, self.shared.path_angle_last - path_angle_roc, self.shared.path_angle_last + path_angle_roc)
 
       # Reset PID if driver applies consistent steering pressure
       if steeringPressed:
@@ -431,10 +425,10 @@ class LateralCurvExt:
     # Update state for next frame
     self.lateralUncertainty = lateralUncertainty
     self.path_offset_last = path_offset
-    self.path_angle_last = path_angle
+    self.shared.path_angle_last = path_angle
     # BluePilot: did the current_curvature +- CURVATURE_ERROR clip constrain the commanded
     # curvature this frame (deviation from measured, not rate-of-change)? See carcontroller.py.
-    self.bp_curvature_deviation_limited = curvature_deviation_limited
+    self.shared.bp_curvature_deviation_limited = curvature_deviation_limited
 
     return LateralResult(
       apply_curvature=apply_curvature,
@@ -442,7 +436,7 @@ class LateralCurvExt:
       path_offset=path_offset,
       path_angle=path_angle,
       ramp_type=ramp_type,
-      precision_type=self.precision_type,
+      precision_type=self.shared.precision_type,
       lateralUncertainty=lateralUncertainty,
     )
 

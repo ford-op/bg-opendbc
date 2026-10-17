@@ -39,7 +39,6 @@ from opendbc.car import DT_CTRL
 from opendbc.car.lateral import apply_std_steer_angle_limits
 from opendbc.car.ford.values import CAR, CarControllerParams
 from opendbc.bluepilot_lateral.core.lateral_curv_ext import LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW, LateralResult
-from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
 from opendbc.bluepilot_lateral.core.lane_center_trim import LaneCenterTrim
 from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
@@ -174,16 +173,13 @@ class LateralAngleExt:
     # BluePilot: rate-limit diagnostics (controllerStateBP)
     self.bp_angle_rate_limited = False      # path_angle soft-ROC clip actually bit this frame
     self.bp_curvature_rate_limited = False  # equivalent curvature would be rate-limited by curv-mode logic (sim)
-    self.bp_curvature_deviation_limited = False  # current_curvature error-clip constrained kappa_cmd this frame
     self.sim_curvature_last = 0.0           # shadow curvature-mode last for the curvatureRateLimited sim
     # Exit detection: track previous desired curvature to sense when planner is actively reducing
     self._desired_curvature_last = 0.0
     # Human-turn override: while the driver manually turns, lateral is forced inactive (mode 0,
     # all-zero signals) instead of winding path_angle into a stale command the PSCM can't cleanly
     # reconcile on release (2-3 s re-engage dead time observed on Mach-E). See module docstring.
-    # Note: in BluePilotLateral this attribute is shared with LateralCurvExt (same mixin instance) --
-    # only one lateral strategy runs per frame, so a single detector serves both.
-    self.human_turn_detector = HumanTurnDetector()
+    # The detector itself is in BluePilotLateral's shared state: one detector serves both modes.
     self.angle_human_turn_active = False  # read by BluePilotLateral.step_lateral to force mode 0
     # Post-override stall blip state (see module constants). angle_stall_blip_active is read by
     # BluePilotLateral.step_lateral to force mode 0, exactly like angle_human_turn_active.
@@ -260,12 +256,12 @@ class LateralAngleExt:
     precision = 1
 
     if not CC.latActive:
-      self.path_angle_last = 0.0
+      self.shared.path_angle_last = 0.0
       self.bp_path_angle_final = 0.0
       self.apply_curvature_last = 0.0
       self.bp_angle_rate_limited = False
       self.bp_curvature_rate_limited = False
-      self.bp_curvature_deviation_limited = False
+      self.shared.bp_curvature_deviation_limited = False
       self.sim_curvature_last = 0.0
       # Publish the shadow curvature from the measured curvature while inactive. LKA keeps
       # carrying angle_mode_engaged whenever angle mode is configured (independent of
@@ -276,7 +272,7 @@ class LateralAngleExt:
       # (ford.h skips the check while steer_control_enabled is 0, so the value is free to
       # follow the measurement during the inactive period itself.)
       self.bp_kappa_cmd = self.inputs.get_current_curvature(CS)
-      self.human_turn_detector.reset()
+      self.shared.human_turn_detector.reset()
       self.angle_human_turn_active = False
       self.lane_center_trim.reset()
       self.stall_blip_hold_s = 0.0
@@ -285,7 +281,7 @@ class LateralAngleExt:
       self.stall_blip_count = 0
       self.angle_stall_blip_active = False
       self.press_timer_s = 0.0
-      self.precision_type = 1
+      self.shared.precision_type = 1
       return LateralResult(
         apply_curvature=0.0,
         curvature_rate=0.0,
@@ -303,15 +299,15 @@ class LateralAngleExt:
     # PSCM re-engage stall this prevents is not something a user should be able to opt out of.
     # On release, no jump seed: path_angle_last is 0, so the normal flow below ramps the command
     # back in through the soft ROC -- generous at human-turn speeds.
-    self.angle_human_turn_active = self.human_turn_detector.update(
+    self.angle_human_turn_active = self.shared.human_turn_detector.update(
       True, CS.out.steeringPressed, CS.out.steeringAngleDeg)
     if self.angle_human_turn_active:
-      self.path_angle_last = 0.0
+      self.shared.path_angle_last = 0.0
       self.bp_path_angle_final = 0.0
       self.apply_curvature_last = 0.0
       self.bp_angle_rate_limited = False
       self.bp_curvature_rate_limited = False
-      self.bp_curvature_deviation_limited = False
+      self.shared.bp_curvature_deviation_limited = False
       self.sim_curvature_last = 0.0
       # Truthful shadow during the override (mirrors the inactive path -- see the comment
       # there): the driver is steering, so the honest command is the car's actual curvature,
@@ -329,7 +325,7 @@ class LateralAngleExt:
       self.stall_blip_count = 0
       self.angle_stall_blip_active = False
       self.press_timer_s = 0.0
-      self.precision_type = 1
+      self.shared.precision_type = 1
       return LateralResult(
         apply_curvature=0.0,
         curvature_rate=0.0,
@@ -349,7 +345,7 @@ class LateralAngleExt:
     else:
       if (self.press_timer_s >= _PRESS_BLIP_MIN_S and self.stall_blip_cooldown_s <= 0.0
           and self.stall_blip_frames_left <= 0
-          and abs(self.path_angle_last) < _BLIP_MAX_PATH_ANGLE):
+          and abs(self.shared.path_angle_last) < _BLIP_MAX_PATH_ANGLE):
         self.stall_blip_frames_left = _STALL_BLIP_FRAMES
       self.press_timer_s = 0.0
 
@@ -361,18 +357,18 @@ class LateralAngleExt:
     if self.stall_blip_frames_left > 0:
       self.stall_blip_frames_left -= 1
       self.angle_stall_blip_active = True
-      self.path_angle_last = 0.0
+      self.shared.path_angle_last = 0.0
       self.bp_path_angle_final = 0.0
       self.apply_curvature_last = 0.0
       self.bp_angle_rate_limited = False
       self.bp_curvature_rate_limited = False
-      self.bp_curvature_deviation_limited = False
+      self.shared.bp_curvature_deviation_limited = False
       self.sim_curvature_last = 0.0
       # Truthful shadow during the blip (see the inactive-path comment).
       self.bp_kappa_cmd = self.inputs.get_current_curvature(CS)
       self._desired_curvature_last = float(actuators.curvature)
       self.lane_center_trim.reset()
-      self.precision_type = 1
+      self.shared.precision_type = 1
       if self.stall_blip_frames_left <= 0:
         self.stall_blip_cooldown_s = _STALL_COOLDOWN_S
       return LateralResult(
@@ -386,7 +382,7 @@ class LateralAngleExt:
       )
     self.angle_stall_blip_active = False
 
-    self.precision_type = 1
+    self.shared.precision_type = 1
     precision = 1
     LP = self.inputs.lp  # noqa: F841  # BluePilot: unused today; kept verbatim from bp-dev
     desired_curvature = float(actuators.curvature)
@@ -436,8 +432,8 @@ class LateralAngleExt:
     # That caused a positive-feedback flat-line: under-steer → CtrSat → path_angle frozen → more under-steer.
     # Use DBC-limit proximity instead: only block when path_angle is already near the ±0.5 rad CAN limits,
     # which is the only condition where the anti-snap unwind rate cap makes physical sense.
-    _dbc_sat = (self.path_angle_last >= FORD_DBC_PATH_ANGLE_MAX * 0.90 or
-                self.path_angle_last <= FORD_DBC_PATH_ANGLE_MIN * 0.90)
+    _dbc_sat = (self.shared.path_angle_last >= FORD_DBC_PATH_ANGLE_MAX * 0.90 or
+                self.shared.path_angle_last <= FORD_DBC_PATH_ANGLE_MIN * 0.90)
     _in_hard_sat = _pscm_lim >= 2 or _dbc_sat
     # BluePilot: per-call delta threshold. The original 0.002 was authored 2026-05-07 on
     # bp-sid-simple (9c3d000fd), which ran STEER_STEP=1 (true 100Hz, switched 2026-04-22) -- so it
@@ -466,7 +462,7 @@ class LateralAngleExt:
       elif self.inputs.model.meta.laneChangeDirection == 2 and requested_curvature > 0:
         requested_curvature *= lane_change_factor
         precision = 0
-    self.precision_type = precision
+    self.shared.precision_type = precision
 
     # Use planner / predicted κ directly for the κ → path_angle map; we are not sending κ on CAN.
     kappa_cmd = float(requested_curvature)
@@ -491,14 +487,14 @@ class LateralAngleExt:
     # here; this brings angle mode's actual steering intent in line with that proven behavior rather
     # than only clipping the value reported to panda (which would make the check a no-op).
     current_curvature = self.inputs.get_current_curvature(CS)
-    self.bp_curvature_deviation_limited = False
+    self.shared.bp_curvature_deviation_limited = False
     if v_ego > 9:
       _kappa_cmd_pre_error_clip = kappa_cmd
       kappa_cmd = float(clip(kappa_cmd, current_curvature - CarControllerParams.CURVATURE_ERROR,
                             current_curvature + CarControllerParams.CURVATURE_ERROR))
       # BluePilot: did this clip actually constrain kappa_cmd this frame (deviation from measured,
       # not rate-of-change -- see carcontroller.py)?
-      self.bp_curvature_deviation_limited = bool(abs(kappa_cmd - _kappa_cmd_pre_error_clip) > 1e-9)
+      self.shared.bp_curvature_deviation_limited = bool(abs(kappa_cmd - _kappa_cmd_pre_error_clip) > 1e-9)
 
     lateral_uncertainty = 0.0  # no curvature-limit ladder until angle-mode torque display is defined
 
@@ -522,7 +518,7 @@ class LateralAngleExt:
     #   Without the decrease cap, model+planner drop path_angle at ~0.36 rad/s at a sharp apex,
     #   driving desired steering 30°+ ahead of actual while the PSCM is pinned, causing a snap when released.
     if _in_hard_sat:
-      _last = self.path_angle_last
+      _last = self.shared.path_angle_last
       _last_mag = abs(_last)
       _curr_mag = abs(path_angle)
       if _curr_mag > _last_mag:  # magnitude growing — block
@@ -531,7 +527,7 @@ class LateralAngleExt:
         _limited_mag = _last_mag - _PSCM_SAT_UNWIND_RATE
         path_angle = float(_limited_mag if _last >= 0 else -_limited_mag)
     elif _pscm_lim >= 1:  # LimitClose (F150/non-angle-mode only): block increases only
-      path_angle = float(clip(path_angle, -abs(self.path_angle_last), abs(self.path_angle_last)))
+      path_angle = float(clip(path_angle, -abs(self.shared.path_angle_last), abs(self.shared.path_angle_last)))
 
     path_angle = min(FORD_DBC_PATH_ANGLE_MAX, max(FORD_DBC_PATH_ANGLE_MIN, path_angle))
 
@@ -547,8 +543,8 @@ class LateralAngleExt:
     _soft_roc = float(interp(v_ego, [9., 10., 15., 25.], [0.055, 0.055, 0.0425, 0.009]))
     _path_angle_pre_roc = path_angle
     path_angle = float(clip(path_angle,
-                            self.path_angle_last - _soft_roc,
-                            self.path_angle_last + _soft_roc))
+                            self.shared.path_angle_last - _soft_roc,
+                            self.shared.path_angle_last + _soft_roc))
     # BluePilot: did the soft ROC clip actually limit the path_angle we wanted to send this frame?
     self.bp_angle_rate_limited = bool(abs(path_angle - _path_angle_pre_roc) > 1e-9)
 
@@ -560,7 +556,7 @@ class LateralAngleExt:
     self.bp_path_angle_gain_highC_highV = self.path_angle_gain_highC_highV
     self.bp_low_speed_curv_factor = self.low_speed_curv_factor
     self.bp_high_speed_curv_factor = self.high_speed_curv_factor
-    self.path_angle_last = path_angle
+    self.shared.path_angle_last = path_angle
     self.bp_path_angle_final = path_angle
     self.apply_curvature_last = 0.0
     # BluePilot: the error-clipped kappa path_angle was derived from -- carcontroller_ext.py reads this
@@ -593,10 +589,10 @@ class LateralAngleExt:
                 and abs(_stall_gap) > _STALL_GAP_MIN
                 and abs(desired_curvature) > abs(current_curvature))
     if _stalled:
-      if self.bp_curvature_deviation_limited and self.stall_blip_cooldown_s <= 0.0:
+      if self.shared.bp_curvature_deviation_limited and self.stall_blip_cooldown_s <= 0.0:
         self.stall_blip_hold_s += _STEER_DT
       if (self.stall_blip_hold_s >= _STALL_HOLD_S and self.stall_blip_count < _STALL_MAX_BLIPS
-          and abs(self.path_angle_last) < _BLIP_MAX_PATH_ANGLE):
+          and abs(self.shared.path_angle_last) < _BLIP_MAX_PATH_ANGLE):
         self.stall_blip_frames_left = _STALL_BLIP_FRAMES
         self.stall_blip_hold_s = 0.0
         self.stall_blip_count += 1
@@ -613,6 +609,6 @@ class LateralAngleExt:
       path_offset=path_offset,
       path_angle=path_angle,
       ramp_type=ramp_type,
-      precision_type=self.precision_type,
+      precision_type=self.shared.precision_type,
       lateralUncertainty=lateral_uncertainty,
     )

@@ -18,6 +18,7 @@ from opendbc.bluepilot_lateral.core.lateral_angle_ext import LateralAngleExt
 from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param, pinion_vehicle_model
 from opendbc.bluepilot_lateral.params.param_store import ParamStore
 from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
 from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
 
 
@@ -86,11 +87,24 @@ class LateralInputs:
       self.VM.update_params(x, sr)
 
 
+class SharedLateralState:
+  """The values both strategies read and write, so either mode sees what the other left, as when
+  the strategies were mixins on one object. bp_curvature_deviation_limited is the BluePilot UI's
+  deviation flag, from whichever mode ran."""
+
+  def __init__(self):
+    self.path_angle_last = 0.0
+    self.precision_type = 1  # 1=Precise, 0=Comfortable
+    self.bp_curvature_deviation_limited = False
+    self.human_turn_detector = HumanTurnDetector()
+
+
 class BluePilotLateral(LateralCurvExt, LateralAngleExt):
   def __init__(self, CP, CP_SP, packer, CAN):
     self.CP = CP
     self.frame = 0
     self.inputs = LateralInputs(CP, CP_SP)
+    self.shared = SharedLateralState()
     LateralCurvExt.__init__(self, CP, CP_SP)
     LateralAngleExt.__init__(self, CP, CP_SP)
     self.packer = packer

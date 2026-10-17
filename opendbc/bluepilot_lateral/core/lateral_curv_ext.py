@@ -15,7 +15,6 @@ A detailed explanation of Ford's control protocol:
 https://www.f150gen14.com/forum/threads/introducing-bluepilot-a-ford-specific-fork-for-comma3x-openpilot.24241/#post-457706
 """
 
-import math
 from collections import namedtuple, deque
 from types import SimpleNamespace
 from enum import IntEnum
@@ -28,9 +27,8 @@ from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, scale_rot_inertia, scale_ti
 from opendbc.car.lateral import ISO_LATERAL_ACCEL, apply_std_steer_angle_limits
 from opendbc.car.vehicle_model import VehicleModel
 from opendbc.car.ford.values import CarControllerParams, FordFlags
-from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, FORD_PINION_WHEELBASE, FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, FORD_PINION_WHEELBASE
 from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
-from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
 
 
@@ -42,6 +40,10 @@ class PrimaryLateralControl(IntEnum):
 # CAN FD lateral-accel cap (match opendbc/car/ford/carcontroller.py apply_ford_curvature_limits)
 AVERAGE_ROAD_ROLL = 0.06  # ~3.4 degrees, 6% superelevation
 MAX_LATERAL_ACCEL = ISO_LATERAL_ACCEL - (ACCELERATION_DUE_TO_GRAVITY * AVERAGE_ROAD_ROLL)
+
+# Lane change smoothing: speed breakpoints (m/s) and the low-speed factor, shared with angle mode
+LANE_CHANGE_FACTOR_BP = [4.4, 40.23]
+LANE_CHANGE_FACTOR_LOW = 0.95
 
 
 # Result namedtuple returned by LateralCurvExt.update()
@@ -138,22 +140,8 @@ class LateralCurvExt:
   """
 
   def __init__(self, CP, CP_SP):
-    # Model / vehicle-parameter inputs arrive per frame in CC_SP.lateralInputs (see update_inputs)
-    self.VM = pinion_vehicle_model(CP)  # used only for the pinion-angle curvature measurement
-    self.model = None
-    self.lp = None
-    self.lateral_delay = 0.0
-
     # Primary lateral control variable: consumed by BluePilotLateral's lateral dispatch.
     self.primary_lateral_control = PrimaryLateralControl.curvature
-
-    # BluePilot: steering-angle curvature measurement (bad-yaw-sensor workaround).
-    # Mirrors the STEER_ANGLE_CURVATURE flag the safety firmware reads from
-    # current_safety_param_sp -- both layers must always agree, so this is init-time
-    # state from CP_SP (set by values_ext.init_ford_safety_param_sp at car init), never a live Params read:
-    # a live flip against stale firmware would fight the panda.
-    self.bp_pinion_curvature_enabled = bool(
-      CP_SP is not None and (CP_SP.safetyParam & FordSafetyFlagsSP.STEER_ANGLE_CURVATURE))
 
     # Toggles (updated from Params each frame)
     self.enable_human_turn_detection_curv = True
@@ -178,8 +166,6 @@ class LateralCurvExt:
     self.pc_blend_ratio_high_C_UI_curv = 0.40  # set by update_lateral_params()
 
     # Lane change smoothing
-    self.lane_change_factor_bp = [4.4, 40.23]  # speed breakpoints (m/s)
-    self.lane_change_factor_low = 0.95
     self.lane_change_factor_high_curv = 0.85  # updated from UI
     self.lane_change = False
     self.lane_change_last = False
@@ -241,56 +227,6 @@ class LateralCurvExt:
 
     self.primary_lateral_control = PrimaryLateralControl(_read_param(params, "FordPrefLateralControl", int, 0))
 
-  def _ensure_lateral_curv_initialized(self, CP):
-    # Compatibility shim for LateralAngleExt, which calls this as a lazy-init guard. In this
-    # branch LateralCurvExt state is initialized eagerly in __init__, so nothing to do here.
-    pass
-
-  def get_current_curvature(self, CS):
-    """Measured curvature of the car right now (OP sign convention).
-
-    The single measurement source for every BluePilot lateral consumer: the deviation
-    clip, the stall detector, and the shadow curvature published to ford.h's angle-mode
-    deviation check. The default source is the RCM yaw rate -- the same family stock
-    ford.h derives its angle_meas from. The shadow value judged against that check must
-    always come from the same measurement as the check's own reference, so route all
-    reads through here.
-
-    With the steering-angle curvature measurement enabled (FordPrefSteerAngleCurvature
-    toggle -> FordSafetyFlagsSP.STEER_ANGLE_CURVATURE), the pinion angle via the vehicle
-    model is used instead: some vehicles (e.g. a 2021 Explorer with a faulty RCM)
-    broadcast implausible VehYaw_W_Actl (sign-inverted vs IMU and steering geometry)
-    while its CAN quality flag still reads OK. The pinion angle (SteeringPinion_Data,
-    PSCM) is an equivalent measurement, independently validated against the comma IMU
-    (corr +0.99), and the panda safety angle_meas switches to the same source (see
-    bluepilot_lateral/safety/ford.h) -- the layers always agree. angleOffsetDeg/roll come from
-    liveParameters (paramsd, IMU-derived, not the car yaw sensor).
-    """
-    if self.bp_pinion_curvature_enabled:
-      angle_offset_deg = self.lp.angleOffsetDeg if self.lp is not None else 0.0
-      roll = self.lp.roll if self.lp is not None else 0.0
-      return -self.VM.calc_curvature(math.radians(CS.out.steeringAngleDeg - angle_offset_deg),
-                                     CS.out.vEgoRaw, roll)
-    return -CS.out.yawRate / max(CS.out.vEgoRaw, 0.1)
-
-  def update_inputs(self, CC_SP):
-    """Take this frame's model / vehicle-parameter inputs from CC_SP and update the vehicle model.
-
-    A frame is used only if it has the full modelV2 shape this code indexes into (33 path points,
-    both inner lane lines, 3+ probs/stds); anything else is ignored and the previous inputs are
-    kept, exactly as a stale SubMaster message was. That also makes fuzzed or partial CC_SP
-    safe: the producer's valid flag is necessary but not trusted on its own."""
-    li = CC_SP.lateralInputs
-    if li.valid and lateral_inputs_complete(li):
-      self.model = ModelView(li)
-      self.lp = VehicleParamsView(li)
-      self.lateral_delay = li.lateralDelay
-
-    if self.lp is not None:
-      x = max(self.lp.stiffnessFactor, 0.1)
-      sr = max(self.lp.steerRatio, 0.1)
-      self.VM.update_params(x, sr)
-
   def update(self, CC, CS, actuators, apply_curvature_last, CP):
     """
     Compute lateral steering signals for the current frame.
@@ -329,12 +265,12 @@ class LateralCurvExt:
       self.pc_blend_ratio_v = [self.pc_blend_ratio_low_C, self.pc_blend_ratio_high_C]
 
       # Current and desired curvature
-      current_curvature = self.get_current_curvature(CS)
+      current_curvature = self.inputs.get_current_curvature(CS)
       desired_curvature = actuators.curvature
 
       # Extract predicted curvature from modelV2
-      if self.model is not None and len(self.model.orientationRate.z) >= 17:
-        curvatures = np.array(self.model.orientationRate.z) / max(0.01, CS.out.vEgoRaw)
+      if self.inputs.model is not None and len(self.inputs.model.orientationRate.z) >= 17:
+        curvatures = np.array(self.inputs.model.orientationRate.z) / max(0.01, CS.out.vEgoRaw)
         predicted_curvature = interp(self.curvature_lookup_time, MODEL_T_IDXS, curvatures)
       else:
         predicted_curvature = 0.0
@@ -344,20 +280,20 @@ class LateralCurvExt:
       requested_curvature = (predicted_curvature * self.pc_blend_ratio) + (desired_curvature * (1 - self.pc_blend_ratio))
 
       # Lane change detection
-      if self.model is not None:
-        self.lane_change = self.model.meta.laneChangeState in (1, 2, 3)
+      if self.inputs.model is not None:
+        self.lane_change = self.inputs.model.meta.laneChangeState in (1, 2, 3)
       else:
         self.lane_change = False
 
       # Lane change curvature smoothing
-      lane_change_factor = interp(CS.out.vEgoRaw, self.lane_change_factor_bp,
-                                   [self.lane_change_factor_low, self.lane_change_factor_high_curv])
+      lane_change_factor = interp(CS.out.vEgoRaw, LANE_CHANGE_FACTOR_BP,
+                                   [LANE_CHANGE_FACTOR_LOW, self.lane_change_factor_high_curv])
 
-      if self.lane_change and self.model is not None:
-        if self.model.meta.laneChangeDirection == 1 and requested_curvature < 0:
+      if self.lane_change and self.inputs.model is not None:
+        if self.inputs.model.meta.laneChangeDirection == 1 and requested_curvature < 0:
           requested_curvature *= lane_change_factor
           self.precision_type = 0
-        elif self.model.meta.laneChangeDirection == 2 and requested_curvature > 0:
+        elif self.inputs.model.meta.laneChangeDirection == 2 and requested_curvature > 0:
           requested_curvature *= lane_change_factor
           self.precision_type = 0
 
@@ -406,16 +342,16 @@ class LateralCurvExt:
       self.reset_steering_last = (reset_steering == 1)
 
       # Path offset: blend model position with laneline data
-      if self.model is not None:
-        path_offset_position = interp(self.path_offset_lookup_time, MODEL_T_IDXS, self.model.position.y)
-        path_offset_lanelines = (self.model.laneLines[1].y[0] + self.model.laneLines[2].y[0]) / 2
+      if self.inputs.model is not None:
+        path_offset_position = interp(self.path_offset_lookup_time, MODEL_T_IDXS, self.inputs.model.position.y)
+        path_offset_lanelines = (self.inputs.model.laneLines[1].y[0] + self.inputs.model.laneLines[2].y[0]) / 2
 
         # Laneline width tolerance (prevents jumps when lanes merge/diverge)
-        laneline_width = self.model.laneLines[2].y[0] + (-self.model.laneLines[1].y[0])
+        laneline_width = self.inputs.model.laneLines[2].y[0] + (-self.inputs.model.laneLines[1].y[0])
         laneline_width_tolerance = interp(laneline_width, [3.75, 4.25], [0.81, 0.59])
 
         # Laneline confidence
-        laneline_confidence = min(self.model.laneLineProbs[1], self.model.laneLineProbs[2], laneline_width_tolerance)
+        laneline_confidence = min(self.inputs.model.laneLineProbs[1], self.inputs.model.laneLineProbs[2], laneline_width_tolerance)
         if not self.enable_lane_full_mode_curv:
           laneline_confidence = 0.0
 

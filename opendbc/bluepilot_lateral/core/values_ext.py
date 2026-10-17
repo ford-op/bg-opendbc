@@ -69,7 +69,7 @@ def init_ford_safety_param_sp(CP: structs.CarParams, CP_SP: structs.CarParamsSP,
   # Steering-angle curvature measurement (bad-yaw-sensor workaround): sets the
   # STEER_ANGLE_CURVATURE flag + the platform geometry-table index on CP_SP.safetyParam,
   # which reaches the safety firmware as current_safety_param_sp (USB 0xdf); the control
-  # side mirrors the same flag (lateral_curv_ext.get_current_curvature). Platforms without
+  # side mirrors the same flag (carcontroller_ext.LateralInputs.get_current_curvature). Platforms without
   # a geometry row silently keep stock yaw behavior -- the toggle no-ops rather than
   # half-configuring.
   if CP.brand == 'ford':

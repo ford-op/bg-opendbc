@@ -10,18 +10,87 @@ passed into step_lateral and the result returned, so switching BluePilot lateral
 continues from the last command, as before.
 """
 
+import math
+
 from opendbc.car.ford.values import CarControllerParams, FordFlags
 from opendbc.bluepilot_lateral.can import fordcan_ext
 from opendbc.bluepilot_lateral.core.lateral_angle_ext import LateralAngleExt
-from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param, pinion_vehicle_model
 from opendbc.bluepilot_lateral.params.param_store import ParamStore
 from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
+
+
+class LateralInputs:
+  """The model / vehicle-parameter inputs both strategies read, and the car's measured curvature.
+  Owned by BluePilotLateral and updated once per frame, before either strategy runs."""
+
+  def __init__(self, CP, CP_SP):
+    # Model / vehicle-parameter inputs arrive per frame in CC_SP.lateralInputs (see update)
+    self.VM = pinion_vehicle_model(CP)  # used only for the pinion-angle curvature measurement
+    self.model = None
+    self.lp = None
+    self.lateral_delay = 0.0
+
+    # BluePilot: steering-angle curvature measurement (bad-yaw-sensor workaround).
+    # Mirrors the STEER_ANGLE_CURVATURE flag the safety firmware reads from
+    # current_safety_param_sp -- both layers must always agree, so this is init-time
+    # state from CP_SP (set by values_ext.init_ford_safety_param_sp at car init), never a live Params read:
+    # a live flip against stale firmware would fight the panda.
+    self.bp_pinion_curvature_enabled = bool(
+      CP_SP is not None and (CP_SP.safetyParam & FordSafetyFlagsSP.STEER_ANGLE_CURVATURE))
+
+  def get_current_curvature(self, CS):
+    """Measured curvature of the car right now (OP sign convention).
+
+    The single measurement source for every BluePilot lateral consumer: the deviation
+    clip, the stall detector, and the shadow curvature published to ford.h's angle-mode
+    deviation check. The default source is the RCM yaw rate -- the same family stock
+    ford.h derives its angle_meas from. The shadow value judged against that check must
+    always come from the same measurement as the check's own reference, so route all
+    reads through here.
+
+    With the steering-angle curvature measurement enabled (FordPrefSteerAngleCurvature
+    toggle -> FordSafetyFlagsSP.STEER_ANGLE_CURVATURE), the pinion angle via the vehicle
+    model is used instead: some vehicles (e.g. a 2021 Explorer with a faulty RCM)
+    broadcast implausible VehYaw_W_Actl (sign-inverted vs IMU and steering geometry)
+    while its CAN quality flag still reads OK. The pinion angle (SteeringPinion_Data,
+    PSCM) is an equivalent measurement, independently validated against the comma IMU
+    (corr +0.99), and the panda safety angle_meas switches to the same source (see
+    bluepilot_lateral/safety/ford.h) -- the layers always agree. angleOffsetDeg/roll come from
+    liveParameters (paramsd, IMU-derived, not the car yaw sensor).
+    """
+    if self.bp_pinion_curvature_enabled:
+      angle_offset_deg = self.lp.angleOffsetDeg if self.lp is not None else 0.0
+      roll = self.lp.roll if self.lp is not None else 0.0
+      return -self.VM.calc_curvature(math.radians(CS.out.steeringAngleDeg - angle_offset_deg),
+                                     CS.out.vEgoRaw, roll)
+    return -CS.out.yawRate / max(CS.out.vEgoRaw, 0.1)
+
+  def update(self, CC_SP):
+    """Take this frame's model / vehicle-parameter inputs from CC_SP and update the vehicle model.
+
+    A frame is used only if it has the full modelV2 shape this code indexes into (33 path points,
+    both inner lane lines, 3+ probs/stds); anything else is ignored and the previous inputs are
+    kept, exactly as a stale SubMaster message was. That also makes fuzzed or partial CC_SP
+    safe: the producer's valid flag is necessary but not trusted on its own."""
+    li = CC_SP.lateralInputs
+    if li.valid and lateral_inputs_complete(li):
+      self.model = ModelView(li)
+      self.lp = VehicleParamsView(li)
+      self.lateral_delay = li.lateralDelay
+
+    if self.lp is not None:
+      x = max(self.lp.stiffnessFactor, 0.1)
+      sr = max(self.lp.steerRatio, 0.1)
+      self.VM.update_params(x, sr)
 
 
 class BluePilotLateral(LateralCurvExt, LateralAngleExt):
   def __init__(self, CP, CP_SP, packer, CAN):
     self.CP = CP
     self.frame = 0
+    self.inputs = LateralInputs(CP, CP_SP)
     LateralCurvExt.__init__(self, CP, CP_SP)
     LateralAngleExt.__init__(self, CP, CP_SP)
     self.packer = packer
@@ -37,7 +106,7 @@ class BluePilotLateral(LateralCurvExt, LateralAngleExt):
     BluePilot lateral is active. Overrides LateralCurvExt.update on this class; the strategy is
     always called explicitly as LateralCurvExt.update(self, ...)."""
     self.frame = frame
-    LateralCurvExt.update_inputs(self, CC_SP)
+    self.inputs.update(CC_SP)
     params = ParamStore.from_cc_sp(CC_SP)
     LateralCurvExt.update_lateral_params(self, params)
     LateralAngleExt.update_angle_params(self, params)

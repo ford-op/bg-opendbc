@@ -27,7 +27,7 @@ def _cc_sp(valid=True):
   return cc_sp
 
 
-class _Ext:
+class _FakeInputs:
   """Bare object carrying only the attributes LateralInputs.update touches."""
   def __init__(self):
     self.model = None
@@ -42,7 +42,7 @@ class _Ext:
 
 class TestLateralInputs(unittest.TestCase):
   def test_model_view_has_modelv2_shape(self):
-    ext = _Ext()
+    ext = _FakeInputs()
     LateralInputs.update(ext, _cc_sp())
     m = ext.model
     self.assertEqual(len(m.orientationRate.z), 33)
@@ -55,7 +55,7 @@ class TestLateralInputs(unittest.TestCase):
     self.assertEqual(m.meta.laneChangeDirection, 1)
 
   def test_vehicle_params_and_delay(self):
-    ext = _Ext()
+    ext = _FakeInputs()
     LateralInputs.update(ext, _cc_sp())
     self.assertEqual(ext.lp.angleOffsetDeg, 0.3)
     self.assertEqual(ext.lp.roll, 0.02)
@@ -63,7 +63,7 @@ class TestLateralInputs(unittest.TestCase):
     self.assertEqual(ext.updated, (0.9, 15.5))
 
   def test_invalid_inputs_leave_previous_values(self):
-    ext = _Ext()
+    ext = _FakeInputs()
     LateralInputs.update(ext, _cc_sp())
     LateralInputs.update(ext, _cc_sp(valid=False))
     self.assertEqual(ext.lateral_delay, 0.12)
@@ -81,7 +81,7 @@ class TestLateralInputs(unittest.TestCase):
 
   def test_short_arrays_are_ignored_even_if_valid(self):
     # fuzzed / partial CC_SP: valid=True but arrays not the modelV2 shape -> frame ignored
-    ext = _Ext()
+    ext = _FakeInputs()
     LateralInputs.update(ext, _cc_sp())
     bad = _cc_sp()
     bad.lateralInputs.laneLineLeftY = []
@@ -89,8 +89,8 @@ class TestLateralInputs(unittest.TestCase):
     self.assertEqual(ext.model.laneLines[1].y[0], -1.8)  # previous inputs kept
     empty = _cc_sp()
     empty.lateralInputs.pathYawRate = [0.0] * 10
-    LateralInputs.update(_Ext(), empty)  # must not raise
-    fresh = _Ext()
+    LateralInputs.update(_FakeInputs(), empty)  # must not raise
+    fresh = _FakeInputs()
     LateralInputs.update(fresh, empty)
     self.assertIsNone(fresh.model)
 
@@ -98,7 +98,7 @@ class TestLateralInputs(unittest.TestCase):
     # a NaN or inf anywhere in the frame -> frame ignored, previous inputs kept
     for field, index in (("laneLineProbs", 1), ("laneLineStds", 2), ("pathYawRate", 5), ("pathY", 0), ("laneLineRightY", 32)):
       for bad_value in (float("nan"), float("inf")):
-        ext = _Ext()
+        ext = _FakeInputs()
         LateralInputs.update(ext, _cc_sp())
         model, lp = ext.model, ext.lp
         bad = _cc_sp()
@@ -109,7 +109,7 @@ class TestLateralInputs(unittest.TestCase):
         self.assertIs(ext.model, model, field)
         self.assertIs(ext.lp, lp, field)
     for field in ("steerRatio", "lateralDelay"):
-      ext = _Ext()
+      ext = _FakeInputs()
       LateralInputs.update(ext, _cc_sp())
       bad = _cc_sp()
       setattr(bad.lateralInputs, field, float("nan"))

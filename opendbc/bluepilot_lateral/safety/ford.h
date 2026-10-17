@@ -350,7 +350,7 @@ static inline void ford_bp_lka_tx(const CANPacket_t *msg) {
 // via the vehicle model, for vehicles whose RCM broadcasts implausible yaw (sign-inverted vs
 // IMU/steering geometry) while its quality flag still reads OK. The pinion angle was validated
 // against the comma IMU (corr +0.99 on real routes); the Python control layer measures from the
-// same source when this is enabled (lateral_curv_ext.get_current_curvature), so the layers always
+// same source when this is enabled (carcontroller_ext.LateralInputs.get_current_curvature), so the layers always
 // agree. ford_rx_hook skips its yaw block while this source is on.
 static inline void ford_bp_rx_hook(const CANPacket_t *msg) {
   if ((msg->addr == FORD_SteeringPinion_Data) && ford_bp_pinion_curvature) {

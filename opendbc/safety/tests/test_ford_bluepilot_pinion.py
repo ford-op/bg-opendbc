@@ -20,7 +20,7 @@ from opendbc.car.vehicle_model import VehicleModel, calc_slip_factor
 from opendbc.bluepilot_lateral.core.values_ext import (
   FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, FORD_PINION_WHEELBASE,
 )
-from opendbc.bluepilot_lateral.core.lateral_curv_ext import pinion_vehicle_model
+from opendbc.bluepilot_lateral.core.carcontroller_ext import pinion_vehicle_model
 from opendbc.car.ford.interface import CarInterface
 from opendbc.safety.tests.ford_bluepilot_common import (
   CURVATURE_TO_CAN, CURVATURE_ERROR_MIN_SPEED, MAX_CURVATURE_ERROR_CAN_PINION, pinion_geometry_table,

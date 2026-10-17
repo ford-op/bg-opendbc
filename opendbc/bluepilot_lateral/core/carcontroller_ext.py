@@ -1,9 +1,10 @@
 """
 BluePilot Ford lateral: the one object the Ford CarController calls.
 
-Holds the two strategies, LateralCurvExt and LateralAngleExt, with the inputs and state they share,
-and does the strategy dispatch and message assembly. Lives above both strategy modules (rather than inside either) so it can call
-into both without the circular import that would result from one depending on the other.
+Holds the two strategies, LateralCurvExt and LateralAngleExt, with the inputs and state they
+share, and does the strategy dispatch and message assembly. Lives above both strategy modules
+(rather than inside either) so it can call into both without the circular import that would
+result from one depending on the other.
 
 The CarController owns apply_curvature_last, which the stock and BluePilot paths share: it is
 passed into step_lateral and the result returned, so switching BluePilot lateral off mid-drive
@@ -11,15 +12,33 @@ continues from the last command, as before.
 """
 
 import math
+from types import SimpleNamespace
 
+from opendbc.car import scale_rot_inertia, scale_tire_stiffness
 from opendbc.car.ford.values import CarControllerParams, FordFlags
+from opendbc.car.vehicle_model import VehicleModel
 from opendbc.bluepilot_lateral.can import fordcan_ext
 from opendbc.bluepilot_lateral.core.lateral_angle_ext import LateralAngleExt
-from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param, pinion_vehicle_model
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param
 from opendbc.bluepilot_lateral.params.param_store import ParamStore
-from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
+from opendbc.bluepilot_lateral.core.values_ext import FORD_PINION_WHEELBASE, FordSafetyFlagsSP
 from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
 from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
+
+
+def pinion_vehicle_model(CP):
+  """Vehicle model for the pinion-angle curvature measurement: CarSpecs, except where BluePilot's
+  pinion geometry uses another wheelbase (FORD_PINION_WHEELBASE, the same value as the C table),
+  keeping the platform's weight split and tire model."""
+  wheelbase = FORD_PINION_WHEELBASE.get(CP.carFingerprint)
+  if wheelbase is None:
+    return VehicleModel(CP)
+  center_to_front = wheelbase * CP.centerToFront / CP.wheelbase
+  front, rear = scale_tire_stiffness(CP.mass, wheelbase, center_to_front, CP.tireStiffnessFactor)
+  return VehicleModel(SimpleNamespace(
+    mass=CP.mass, rotationalInertia=scale_rot_inertia(CP.mass, wheelbase), wheelbase=wheelbase,
+    centerToFront=center_to_front, steerRatioRear=CP.steerRatioRear, steerRatio=CP.steerRatio,
+    tireStiffnessFront=front, tireStiffnessRear=rear))
 
 
 class LateralInputs:
@@ -105,8 +124,8 @@ class BluePilotLateral:
     self.frame = 0
     self.inputs = LateralInputs(CP, CP_SP)
     self.shared = SharedLateralState()
-    self.curv = LateralCurvExt(CP, CP_SP, self.inputs, self.shared)
-    self.angle = LateralAngleExt(CP, CP_SP, self.inputs, self.shared)
+    self.curv = LateralCurvExt(self.inputs, self.shared)
+    self.angle = LateralAngleExt(CP, self.inputs, self.shared)
     self.packer = packer
     self.CAN = CAN
 
@@ -140,7 +159,7 @@ class BluePilotLateral:
     # the prior frame's lat.apply_curvature only (not an intermediate stock-limited value).
     angle_mode = self.curv.primary_lateral_control == PrimaryLateralControl.angle
     if angle_mode:
-      lat = self.angle.update_angle_strategy(CC, CS, actuators, self.CP)
+      lat = self.angle.update_angle_strategy(CC, CS, actuators)
     else:
       lat = self.curv.update(CC, CS, actuators, apply_curvature_last, self.CP)
     apply_curvature = float(lat.apply_curvature)

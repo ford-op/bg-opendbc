@@ -37,9 +37,9 @@ from numpy import clip, interp
 from opendbc.car import DT_CTRL
 from opendbc.car.lateral import apply_std_steer_angle_limits
 from opendbc.car.ford.values import CAR, CarControllerParams
-from opendbc.bluepilot_lateral.core.lateral_curv_ext import LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW, LateralResult
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralResult
 from opendbc.bluepilot_lateral.core.lane_center_trim import LaneCenterTrim
-from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS
+from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
 
 # Hard-coded per-platform gain defaults.
@@ -136,9 +136,9 @@ def pscm_d_ref_m(v_ego_ms: float) -> float:
 
 
 class LateralAngleExt:
-  def __init__(self, CP, CP_SP, inputs, shared):
+  def __init__(self, CP, inputs, shared):
     self.CP = CP
-    # BluePilotLateral's LateralInputs and SharedLateralState, read by both strategies
+    # BluePilotLateral's LateralInputs (read) and SharedLateralState (read and written), common to both strategies
     self.inputs = inputs
     self.shared = shared
     # Predicted-curvature blend for path_angle: pred * b + desired * (1-b); b is this fixed default
@@ -240,7 +240,7 @@ class LateralAngleExt:
         except Exception:
           pass
 
-  def update_angle_strategy(self, CC, CS, actuators, CP):
+  def update_angle_strategy(self, CC, CS, actuators):
     """
     Curvature from planner (+ optional predicted blend, + lane centering trim) → path_angle via
     ½·κ·d_ref. c0 (path_offset) is always zero on the wire; the lane centering trim lives entirely

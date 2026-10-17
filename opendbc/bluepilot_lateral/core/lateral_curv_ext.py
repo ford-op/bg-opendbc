@@ -16,18 +16,16 @@ https://www.f150gen14.com/forum/threads/introducing-bluepilot-a-ford-specific-fo
 """
 
 from collections import namedtuple, deque
-from types import SimpleNamespace
 from enum import IntEnum
 
 import numpy as np
 from numpy import clip, interp
 
 from opendbc.car.common.pid import PIDController
-from opendbc.car import ACCELERATION_DUE_TO_GRAVITY, scale_rot_inertia, scale_tire_stiffness
+from opendbc.car import ACCELERATION_DUE_TO_GRAVITY
 from opendbc.car.lateral import ISO_LATERAL_ACCEL, apply_std_steer_angle_limits
-from opendbc.car.vehicle_model import VehicleModel
 from opendbc.car.ford.values import CarControllerParams, FordFlags
-from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, FORD_PINION_WHEELBASE
+from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
 
 
@@ -39,10 +37,6 @@ class PrimaryLateralControl(IntEnum):
 # CAN FD lateral-accel cap (match opendbc/car/ford/carcontroller.py apply_ford_curvature_limits)
 AVERAGE_ROAD_ROLL = 0.06  # ~3.4 degrees, 6% superelevation
 MAX_LATERAL_ACCEL = ISO_LATERAL_ACCEL - (ACCELERATION_DUE_TO_GRAVITY * AVERAGE_ROAD_ROLL)
-
-# Lane change smoothing: speed breakpoints (m/s) and the low-speed factor, shared with angle mode
-LANE_CHANGE_FACTOR_BP = [4.4, 40.23]
-LANE_CHANGE_FACTOR_LOW = 0.95
 
 
 # Result namedtuple returned by LateralCurvExt.update()
@@ -103,21 +97,6 @@ def apply_ford_curvature_limits_ext(apply_curvature, apply_curvature_last, curre
   return apply_curvature, max_curvature, curvature_deviation_limited
 
 
-def pinion_vehicle_model(CP):
-  """Vehicle model for the pinion-angle curvature measurement: CarSpecs, except where BluePilot's
-  pinion geometry uses another wheelbase (FORD_PINION_WHEELBASE, the same value as the C table),
-  keeping the platform's weight split and tire model."""
-  wheelbase = FORD_PINION_WHEELBASE.get(CP.carFingerprint)
-  if wheelbase is None:
-    return VehicleModel(CP)
-  center_to_front = wheelbase * CP.centerToFront / CP.wheelbase
-  front, rear = scale_tire_stiffness(CP.mass, wheelbase, center_to_front, CP.tireStiffnessFactor)
-  return VehicleModel(SimpleNamespace(
-    mass=CP.mass, rotationalInertia=scale_rot_inertia(CP.mass, wheelbase), wheelbase=wheelbase,
-    centerToFront=center_to_front, steerRatioRear=CP.steerRatioRear, steerRatio=CP.steerRatio,
-    tireStiffnessFront=front, tireStiffnessRear=rear))
-
-
 def _read_param(params, key, cast, default):
   # params is a ParamStore over CarControlSP.params: get() raises for a key the fork did not
   # publish, so the caller default applies, bools included (get_bool alone would read an
@@ -138,8 +117,8 @@ class LateralCurvExt:
   4-signal steering command instead of the upstream curvature-only approach.
   """
 
-  def __init__(self, CP, CP_SP, inputs, shared):
-    # BluePilotLateral's LateralInputs and SharedLateralState, read by both strategies
+  def __init__(self, inputs, shared):
+    # BluePilotLateral's LateralInputs (read) and SharedLateralState (read and written), common to both strategies
     self.inputs = inputs
     self.shared = shared
 

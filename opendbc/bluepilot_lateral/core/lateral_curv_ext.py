@@ -431,7 +431,7 @@ class LateralCurvExt:
     self.path_offset_last = path_offset
     self.shared.path_angle_last = path_angle
     # BluePilot: did the current_curvature +- CURVATURE_ERROR clip constrain the commanded
-    # curvature this frame (deviation from measured, not rate-of-change)? See carcontroller.py.
+    # curvature this frame (deviation from measured, not rate-of-change)? The BluePilot UI's deviation flag.
     self.shared.bp_curvature_deviation_limited = curvature_deviation_limited
 
     return LateralResult(

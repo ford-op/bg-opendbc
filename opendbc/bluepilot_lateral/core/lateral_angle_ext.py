@@ -2,9 +2,8 @@
 BluePilot: Ford CAN-FD path-angle–primary lateral control (developer).
 
 Steering intent is c1 from κ → θ. Converts planner/model curvature into ``path_angle`` using
-PSCM short lookahead d_ref and y ≈ ½κ x² ⇒ path_angle = ½ κ d_ref (see
-``bluepilot/agent_info/20_FORD_PSCM_KNOWLEDGE_PACK.md``). Predicted curvature (modelV2) is
-blended with ``actuators.curvature`` per ``FordPathAngleBlendRatio`` (0 = planner only,
+PSCM short lookahead d_ref and y ≈ ½κ x² ⇒ path_angle = ½ κ d_ref. Predicted curvature
+(modelV2) is blended with ``actuators.curvature`` by ``path_angle_blend_ratio`` (0 = planner only,
 1 = model only).
 
 **c0 (path_offset) is always zero on the wire, unconditionally.** An earlier port attempt piped
@@ -142,11 +141,11 @@ class LateralAngleExt:
     # BluePilotLateral's LateralInputs and SharedLateralState, read by both strategies
     self.inputs = inputs
     self.shared = shared
-    # Predicted-curvature blend for path_angle: pred * b + desired * (1-b); b from ``FordPathAngleBlendRatio``
+    # Predicted-curvature blend for path_angle: pred * b + desired * (1-b); b is this fixed default
     self.path_angle_blend_ratio = _FORD_PATH_ANGLE_BLEND_RATIO_DEFAULT
-    # Max extra VLT above t_base; from ``FordVLTExtraMax`` param
+    # Max extra VLT above t_base (fixed)
     self.vlt_extra_max = _VLT_T_EXTRA_MAX
-    # Telemetry: final path_angle (rad) after limits (see bp_card_publisher)
+    # Telemetry: final path_angle (rad) after limits (for the BluePilot UI's bp_card_publisher)
     self.bp_path_angle_final = 0.0
     # High-speed gain factors: set per-platform via carFingerprint in update_angle_params.
     self.path_angle_gain_lowC_highV = 1.0   # dampening at high speed, low curvature
@@ -173,7 +172,7 @@ class LateralAngleExt:
     # BluePilot: error-clipped kappa path_angle was derived from -- carcontroller_ext.py reads this as
     # shadow_curvature for ford.h's angle-mode deviation check. Actively consumed, not telemetry.
     self.bp_kappa_cmd = 0.0
-    # BluePilot: rate-limit diagnostics (controllerStateBP)
+    # BluePilot: rate-limit diagnostics (the BluePilot UI's controllerStateBP)
     self.bp_angle_rate_limited = False      # path_angle soft-ROC clip actually bit this frame
     self.bp_curvature_rate_limited = False  # equivalent curvature would be rate-limited by curv-mode logic (sim)
     self.sim_curvature_last = 0.0           # shadow curvature-mode last for the curvatureRateLimited sim
@@ -493,7 +492,7 @@ class LateralAngleExt:
       kappa_cmd = float(clip(kappa_cmd, current_curvature - CarControllerParams.CURVATURE_ERROR,
                             current_curvature + CarControllerParams.CURVATURE_ERROR))
       # BluePilot: did this clip actually constrain kappa_cmd this frame (deviation from measured,
-      # not rate-of-change -- see carcontroller.py)?
+      # not rate-of-change)? The BluePilot UI's deviation flag.
       self.shared.bp_curvature_deviation_limited = bool(abs(kappa_cmd - _kappa_cmd_pre_error_clip) > 1e-9)
 
     lateral_uncertainty = 0.0  # no curvature-limit ladder until angle-mode torque display is defined

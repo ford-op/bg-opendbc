@@ -137,8 +137,11 @@ def pscm_d_ref_m(v_ego_ms: float) -> float:
 
 
 class LateralAngleExt:
-  def __init__(self, CP=None, CP_SP=None):
+  def __init__(self, CP, CP_SP, inputs, shared):
     self.CP = CP
+    # BluePilotLateral's LateralInputs and SharedLateralState, read by both strategies
+    self.inputs = inputs
+    self.shared = shared
     # Predicted-curvature blend for path_angle: pred * b + desired * (1-b); b from ``FordPathAngleBlendRatio``
     self.path_angle_blend_ratio = _FORD_PATH_ANGLE_BLEND_RATIO_DEFAULT
     # Max extra VLT above t_base; from ``FordVLTExtraMax`` param

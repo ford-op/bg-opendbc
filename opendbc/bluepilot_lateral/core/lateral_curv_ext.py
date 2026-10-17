@@ -3,7 +3,7 @@ BluePilot Ford lateral curvature extension.
 
 Implements Ford's 4-signal lateral control (curvature, curvature_rate, path_offset, path_angle)
 using predicted curvature from modelV2, PID-based lane centering, and laneline-aware path offset.
-Mixed into BluePilotLateral (carcontroller_ext.py) as LateralCurvExt.
+Held by BluePilotLateral (carcontroller_ext.py) as LateralCurvExt.
 
 Ford uses four signals to control steering:
   - curvature: primary steering command (also used in upstream, limited to 0.02 m^-1)
@@ -133,12 +133,16 @@ class LateralCurvExt:
   """
   BluePilot lateral control extension for Ford vehicles.
 
-  Mixed into BluePilotLateral (carcontroller_ext.py), which calls
-  LateralCurvExt.update() during the lateral control loop (20Hz) to get the full
+  Held by BluePilotLateral (carcontroller_ext.py), which calls
+  update() during the lateral control loop (20Hz) to get the full
   4-signal steering command instead of the upstream curvature-only approach.
   """
 
-  def __init__(self, CP, CP_SP):
+  def __init__(self, CP, CP_SP, inputs, shared):
+    # BluePilotLateral's LateralInputs and SharedLateralState, read by both strategies
+    self.inputs = inputs
+    self.shared = shared
+
     # Primary lateral control variable: consumed by BluePilotLateral's lateral dispatch.
     self.primary_lateral_control = PrimaryLateralControl.curvature
 

@@ -261,7 +261,6 @@ class LateralAngleExt:
     if not CC.latActive:
       self.shared.path_angle_last = 0.0
       self.bp_path_angle_final = 0.0
-      self.apply_curvature_last = 0.0
       self.bp_angle_rate_limited = False
       self.bp_curvature_rate_limited = False
       self.shared.bp_curvature_deviation_limited = False
@@ -307,7 +306,6 @@ class LateralAngleExt:
     if self.angle_human_turn_active:
       self.shared.path_angle_last = 0.0
       self.bp_path_angle_final = 0.0
-      self.apply_curvature_last = 0.0
       self.bp_angle_rate_limited = False
       self.bp_curvature_rate_limited = False
       self.shared.bp_curvature_deviation_limited = False
@@ -362,7 +360,6 @@ class LateralAngleExt:
       self.angle_stall_blip_active = True
       self.shared.path_angle_last = 0.0
       self.bp_path_angle_final = 0.0
-      self.apply_curvature_last = 0.0
       self.bp_angle_rate_limited = False
       self.bp_curvature_rate_limited = False
       self.shared.bp_curvature_deviation_limited = False
@@ -561,7 +558,6 @@ class LateralAngleExt:
     self.bp_high_speed_curv_factor = self.high_speed_curv_factor
     self.shared.path_angle_last = path_angle
     self.bp_path_angle_final = path_angle
-    self.apply_curvature_last = 0.0
     # BluePilot: the error-clipped kappa path_angle was derived from -- carcontroller_ext.py reads this
     # as shadow_curvature for ford.h's angle-mode deviation check (see fordcan_ext.create_lka_msg).
     # Not just telemetry: an actively-consumed value, unlike the removed *_kappa_cmd_raw stubs.

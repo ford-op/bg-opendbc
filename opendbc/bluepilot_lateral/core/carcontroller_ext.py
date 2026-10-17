@@ -129,8 +129,8 @@ class BluePilotLateral:
     return not self.disable_BP_lat_UI
 
   def step_lateral(self, CC, CS, actuators, apply_curvature_last):
-    """At STEER_STEP: the steer message(s). Returns (can_sends, apply_curvature)."""
-    self.apply_curvature_last = apply_curvature_last
+    """At STEER_STEP: the steer message(s). Returns (can_sends, apply_curvature): the CarController
+    keeps it and passes it back next time as apply_curvature_last."""
     # BluePilot: select the BP lateral strategy by primary control variable.
     #   angle     -> LateralAngleExt: kappa -> path_angle (c1), apply_curvature held at 0.
     #   curvature -> LateralCurvExt: full 4-signal curvature-primary (default).
@@ -142,8 +142,8 @@ class BluePilotLateral:
     if angle_mode:
       lat = self.angle.update_angle_strategy(CC, CS, actuators, self.CP)
     else:
-      lat = self.curv.update(CC, CS, actuators, self.apply_curvature_last, self.CP)
-    self.apply_curvature_last = float(lat.apply_curvature)
+      lat = self.curv.update(CC, CS, actuators, apply_curvature_last, self.CP)
+    apply_curvature = float(lat.apply_curvature)
 
     # BluePilot: angle-mode human-turn override -- send lateral inactive (mode 0) while the
     # driver manually turns, so the PSCM releases cleanly instead of stalling 2-3 s on
@@ -168,7 +168,7 @@ class BluePilotLateral:
         self.packer, self.CAN, lat_active, lat.ramp_type, lat.precision_type,
         -lat.path_offset, -lat.path_angle, -lat.apply_curvature, -lat.curvature_rate
       ))
-    return can_sends, self.apply_curvature_last
+    return can_sends, apply_curvature
 
   def step_lka(self, CC, hud_control):
     """At LKA_STEP: the Lane_Assist_Data1 message."""

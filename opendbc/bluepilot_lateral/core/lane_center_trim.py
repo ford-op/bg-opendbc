@@ -14,10 +14,10 @@ for a lane-centering nudge, and it bypasses every limiter angle mode already app
 
 This class instead computes a small correction in the **curvature domain**, meant to be added to
 ``kappa_cmd`` before any of those limiters run -- so the correction automatically inherits all of
-them, with no new safety-relevant code path. This mirrors where a GM-focused fork (StarPilot,
-u/jc01rho -- ``selfdrive/controls/lib/drive_helpers.py::LaneCenteringController`` on
-``feat/lane-centering-camera-offset``) places their own lane-centering trim: on the universal
-``desired_curvature`` signal, upstream of any car-specific actuator conversion. The geometry here
+them, with no new safety-relevant code path. The core is ported from StarPilot's
+``selfdrive/controls/lib/lane_centering.py`` (``LaneCenteringController``, by jc01rho; see
+CREDITS.md), which applies its trim the same way: on the universal ``desired_curvature`` signal,
+upstream of any car-specific actuator conversion. The geometry here
 (``raw_correction = 2*error / lookahead**2``) is the same ``y ~= 1/2 * kappa * x**2`` relation
 BluePilot already uses for PSCM d_ref / path_angle elsewhere in this package, solved for the
 curvature that would eliminate a lateral position error at the lookahead distance.

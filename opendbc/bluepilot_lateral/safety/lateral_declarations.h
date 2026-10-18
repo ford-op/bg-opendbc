@@ -28,6 +28,7 @@ static inline bool ford_bp_curvature_rate_lookup_check(int desired_curvature, co
 
 // BluePilot: curvature command checks for the BluePilot lateral (Ford only today, see the
 // FORD_LIMITS macro in opendbc/bluepilot_lateral/safety/ford.h). Upstream's steer_curvature_cmd_checks with
-// the measured-table check in place of its ISO accel and jerk checks.
+// the measured-table check in place of its ISO accel and jerk checks, and no value checks at
+// curvature 0, the no-curvature-command sentinel (only the message-rate check and the gates).
 static inline bool ford_bp_curvature_cmd_checks(int desired_curvature, bool steer_control_enabled,
                                                 const FordBpCurvatureLimits *limits);

@@ -10,8 +10,8 @@ stock assertions the 4-signal lateral changes on purpose are replaced:
     BluePilot equivalents are in test_ford_bluepilot_limits.py (every signal, exact boundaries).
   * test_max_lateral_acceleration: BluePilot caps at ISO_LATERAL_ACCEL - g*roll (~2.41 m/s^2)
     with a speed fudge, not upstream's ~3.6 m/s^2; CAN FD only.
-  * test_rt_limits runs unchanged: it sends curvature-0 frames, which get the message-rate check in
-    ford_lmc_checks' curvature-0 branch (#24). test_rt_limits_nonzero_curvature pins it for
+  * test_rt_limits runs unchanged: it sends curvature-0 frames, which still get the message-rate
+    check in ford_bp_curvature_cmd_checks (#24, #60). test_rt_limits_nonzero_curvature pins it for
     curvature mode.
 """
 import unittest

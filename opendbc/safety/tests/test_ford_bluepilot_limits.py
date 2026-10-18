@@ -35,7 +35,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     v_min, v_max = self.speeds()
     m_min, m_max = self.meas()
     for desired in probes:
-      if desired == 0 or abs(desired) > CURVATURE_SIGNAL_MAX_CAN:  # 0 takes the curvature-0 branch, which the model does not mirror
+      if desired == 0 or abs(desired) > CURVATURE_SIGNAL_MAX_CAN:  # 0 skips the value checks the model mirrors
         continue
       expected = self.model.allowed(desired, last_can, m_min, m_max, v_min, v_max, v_max)
       with self.subTest(speed=v_max, meas=(m_min, m_max), last=last_can, desired=desired):
@@ -212,9 +212,9 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     self.tx(self.lka_bp_status_msg(False, 0.0))
 
   def test_zero_curvature_skips_curvature_checks(self):
-    """Curvature == 0 (angle mode's sentinel) discards the curvature checks' result; only the
-    controls-allowed gate remains (the curvature == 0 branch of ford_lmc_checks). Pins current
-    behavior, see #10."""
+    """Curvature == 0 (angle mode's sentinel) skips the curvature value checks (cap, rate tables,
+    error band); the controls-allowed gate and the message-rate check remain
+    (ford_bp_curvature_cmd_checks). Pins current behavior, see #10 and #60."""
     self.set_meas(0.01, 15.0)  # measured 500 CAN: a real curvature command of 0 would be far outside the band
     self.assertTrue(self.tx(self.lat(True, 0, SMALL_ANGLE, 0, 0)))
     self.safety.set_controls_allowed(False)
@@ -226,7 +226,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
 
   def test_reset_frame_accepted_mid_curve(self):
     """Curvature mode's human-turn reset: steering enabled, curvature 0 and path_angle 0 while the
-    car is mid-curve. The curvature-0 branch skips the error band, so the frame is accepted; the
+    car is mid-curve. Curvature 0 skips the error band, so the frame is accepted; the
     controller depends on this."""
     self.set_meas(0.01, 20.0)  # measured 500 CAN: a real curvature command of 0 would be far outside the band
     self.set_prev_curvature_can(500)
@@ -264,7 +264,7 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
     results = []
     for _ in range(FORMER_LATCH_WINDOW_FRAMES):
       pos = [max(-b, min(b, p + round(rng.uniform(-1.3, 1.3) * s))) for p, s, b in zip(pos, steps, bounds, strict=True)]
-      pos[0] = pos[0] or self.TINY_CURVATURE_CAN  # curvature 0 would take the curvature-0 branch
+      pos[0] = pos[0] or self.TINY_CURVATURE_CAN  # curvature 0 would skip the value checks
       curvature, angle, offset = pos
       results.append(self.tx(self.lat(True, offset / PATH_OFFSET_TO_CAN, angle / PATH_ANGLE_TO_CAN, curvature / CURVATURE_TO_CAN, 0)))
     return results

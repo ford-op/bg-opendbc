@@ -77,6 +77,9 @@ static inline bool ford_bp_curvature_rate_lookup_check(int desired_curvature, co
 // ford_bp_curvature_rate_lookup_check in place of its ISO lateral accel and jerk checks. Ford has no
 // steer power signal (max_steer_power 0) and resets to zero on a violation
 // (inactive_curvature_is_zero), so only those sides of upstream's branches are kept.
+// The other difference from upstream: curvature 0 (no curvature command: angle mode, curvature
+// mode's reset frame) skips the cap and rate-table checks, keeping the message-rate check and the
+// gates. Keep it when re-syncing against upstream (#60).
 static inline bool ford_bp_curvature_cmd_checks(int desired_curvature, bool steer_control_enabled,
                                                 const FordBpCurvatureLimits *limits) {
   bool violation = false;

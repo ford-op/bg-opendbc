@@ -216,13 +216,14 @@ class TestFordBPPinionGeometryTable(unittest.TestCase):
     self.assertLessEqual(len(rows) - 1, 15)
     # every supported platform has a row, every Python index entry points at a C row.
     # C may carry rows for platforms upstream has since dropped (row 10, Mondeo): unused, harmless.
-    # host-only platforms (FORD_HOST_ONLY_PLATFORMS) have rows but no CarSpecs here
-    self.assertEqual(set(FORD_PINION_GEOMETRY_INDEX) - FORD_HOST_ONLY_PLATFORMS, set(CAR), "every Ford platform needs a geometry row")
+    # a row for a platform this host's CAR doesn't have (FORD_HOST_ONLY_PLATFORMS) has no CarSpecs here
+    self.assertEqual({n for n in FORD_PINION_GEOMETRY_INDEX if n in set(CAR)}, set(CAR), "every Ford platform needs a geometry row")
+    self.assertTrue(set(FORD_PINION_GEOMETRY_INDEX) - set(CAR) <= FORD_HOST_ONLY_PLATFORMS)
     self.assertTrue(set(FORD_PINION_GEOMETRY_INDEX.values()) <= set(rows) - {0})
     self.assertEqual(len(set(FORD_PINION_GEOMETRY_INDEX.values())), len(FORD_PINION_GEOMETRY_INDEX), "duplicate index")
 
     for name, idx in FORD_PINION_GEOMETRY_INDEX.items():
-      if name not in FORD_HOST_ONLY_PLATFORMS:
+      if name in set(CAR):
         self._assert_row_matches_carspecs(CAR(name), idx)
 
   def test_f150_uses_the_average_wheelbase(self):
@@ -237,7 +238,7 @@ class TestFordBPPinionGeometryTable(unittest.TestCase):
 
   def test_other_platforms_use_carspecs(self):
     for car in FORD_PINION_GEOMETRY_INDEX:
-      if car in FORD_PINION_WHEELBASE or car in FORD_HOST_ONLY_PLATFORMS:
+      if car in FORD_PINION_WHEELBASE or car not in set(CAR):
         continue
       CP = CarInterface.get_non_essential_params(car)
       with self.subTest(car=car):

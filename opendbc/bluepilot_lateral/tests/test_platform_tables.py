@@ -17,17 +17,20 @@ TABLES = {
 class TestPlatformTables(unittest.TestCase):
   def test_names_are_known_platforms(self):
     """Every per-platform row is keyed by a plain platform name, so a host without that platform
-    imports fine, and the name is a Ford platform here or a declared host-only one: a typo would
-    otherwise silently drop the platform's row."""
-    known = {str(c) for c in CAR} | FORD_HOST_ONLY_PLATFORMS
+    imports fine, and a name this host's CAR doesn't have must be a declared host-only one: a typo
+    would otherwise silently drop the platform's row. (A host that has a host-only platform, e.g.
+    BP7 with Mondeo, sees it in CAR, so this holds there too.)"""
+    here = {str(c) for c in CAR}
     for table, names in TABLES.items():
       for name in names:
         with self.subTest(table=table, name=name):
           self.assertIs(type(name), str)
-          self.assertIn(name, known)
+          self.assertTrue(name in here or name in FORD_HOST_ONLY_PLATFORMS, name)
 
-  def test_host_only_platforms_are_not_here(self):
-    self.assertFalse(FORD_HOST_ONLY_PLATFORMS & {str(c) for c in CAR})
+  def test_gain_groups_do_not_overlap(self):
+    """update_angle_params checks the body-on-frame group first, so a platform in both would
+    silently get those gains."""
+    self.assertFalse(ANGLE_GAIN_CANFD_BOF_CARS & ANGLE_GAIN_CANFD_SUV_CARS)
 
 
 if __name__ == "__main__":

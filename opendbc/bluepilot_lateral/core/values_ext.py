@@ -40,8 +40,9 @@ class FordSafetyFlagsSP:
 # BluePilot but not in this opendbc baseline. Indices stay aligned with the C table.
 # BluePilot: the per-platform tables key on the platform name (CP.carFingerprint), not the CAR enum,
 # so a row for a platform some host lacks never breaks import there; it just never matches.
-# FORD_HOST_ONLY_PLATFORMS lists the names with rows here that this repo's CAR doesn't have (each
-# with the hosts that do); every other name must be in CAR (tests/test_platform_tables.py).
+# FORD_HOST_ONLY_PLATFORMS lists the names with rows here that this repo's CAR doesn't have (e.g.
+# Mondeo MK5, which BP7 and StarPilot have; note the hosts with each); any name a host's CAR lacks
+# must be on it (tests/test_platform_tables.py).
 FORD_HOST_ONLY_PLATFORMS: frozenset[str] = frozenset()
 
 FORD_PINION_GEOMETRY_SHIFT = 1

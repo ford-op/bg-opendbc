@@ -36,31 +36,14 @@ from numpy import clip, interp
 
 from opendbc.car import DT_CTRL
 from opendbc.car.lateral import apply_std_steer_angle_limits
-from opendbc.car.ford.values import CAR, CarControllerParams
+from opendbc.car.ford.values import CarControllerParams
 from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralResult
 from opendbc.bluepilot_lateral.core.lane_center_trim import LaneCenterTrim
-from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW
+from opendbc.bluepilot_lateral.core.values_ext import (
+  ANGLE_GAIN_CAN, ANGLE_GAIN_CANFD_BOF, ANGLE_GAIN_CANFD_BOF_CARS, ANGLE_GAIN_CANFD_SUV, ANGLE_GAIN_CANFD_SUV_CARS,
+  BP_ANGLE_LIMITS, LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW,
+)
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
-
-# Hard-coded per-platform gain defaults.
-# CAN vehicles (Escape MK4, Bronco Sport, Explorer, Maverick, Edge)
-_GAIN_CAN         = (1.00, 1.15)
-# CAN-FD body-on-frame trucks (F-150, Lightning, Expedition, Ranger)
-_GAIN_CANFD_BOF   = (0.95, 0.95)
-# CAN-FD unibody SUVs (Mustang Mach-E, Escape MK4.5)
-_GAIN_CANFD_SUV   = (1.00, 1.05)
-
-_CANFD_BOF_CARS = frozenset({
-  CAR.FORD_F_150_MK14,
-  CAR.FORD_F_150_LIGHTNING_MK1,
-  CAR.FORD_EXPEDITION_MK4,
-  CAR.FORD_RANGER_MK2,
-})
-_CANFD_SUV_CARS = frozenset({
-  CAR.FORD_MUSTANG_MACH_E_MK1,
-  CAR.FORD_ESCAPE_MK4_5,
-})
-
 
 # DBC ``LatCtlPath_An_Actl`` (rad) — panda safety uses the same in ``ford.h``; PSCM enforces in firmware.
 FORD_DBC_PATH_ANGLE_MIN = -0.5
@@ -195,12 +178,12 @@ class LateralAngleExt:
   def update_angle_params(self, params):
     """Sets per-platform gain defaults and reads user angle-tuning params."""
     fp = getattr(self.CP, 'carFingerprint', '')
-    if fp in _CANFD_BOF_CARS:
-      low, high = _GAIN_CANFD_BOF
-    elif fp in _CANFD_SUV_CARS:
-      low, high = _GAIN_CANFD_SUV
+    if fp in ANGLE_GAIN_CANFD_BOF_CARS:
+      low, high = ANGLE_GAIN_CANFD_BOF
+    elif fp in ANGLE_GAIN_CANFD_SUV_CARS:
+      low, high = ANGLE_GAIN_CANFD_SUV
     else:
-      low, high = _GAIN_CAN
+      low, high = ANGLE_GAIN_CAN
     self.path_angle_gain_lowC_highV = low
     self.path_angle_gain_highC_highV = high
     if params is not None and hasattr(params, "get"):

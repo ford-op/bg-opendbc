@@ -18,7 +18,7 @@ from opendbc.car.ford.values import CAR
 from opendbc.car.structs import CarParams
 from opendbc.car.vehicle_model import VehicleModel, calc_slip_factor
 from opendbc.bluepilot_lateral.core.values_ext import (
-  FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, FORD_PINION_WHEELBASE,
+  FordSafetyFlagsSP, FORD_HOST_ONLY_PLATFORMS, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, FORD_PINION_WHEELBASE,
 )
 from opendbc.bluepilot_lateral.core.carcontroller_ext import pinion_vehicle_model
 from opendbc.car.ford.interface import CarInterface
@@ -216,12 +216,14 @@ class TestFordBPPinionGeometryTable(unittest.TestCase):
     self.assertLessEqual(len(rows) - 1, 15)
     # every supported platform has a row, every Python index entry points at a C row.
     # C may carry rows for platforms upstream has since dropped (row 10, Mondeo): unused, harmless.
-    self.assertEqual(set(FORD_PINION_GEOMETRY_INDEX), set(CAR), "every Ford platform needs a geometry row")
+    # host-only platforms (FORD_HOST_ONLY_PLATFORMS) have rows but no CarSpecs here
+    self.assertEqual(set(FORD_PINION_GEOMETRY_INDEX) - FORD_HOST_ONLY_PLATFORMS, set(CAR), "every Ford platform needs a geometry row")
     self.assertTrue(set(FORD_PINION_GEOMETRY_INDEX.values()) <= set(rows) - {0})
     self.assertEqual(len(set(FORD_PINION_GEOMETRY_INDEX.values())), len(FORD_PINION_GEOMETRY_INDEX), "duplicate index")
 
-    for car, idx in FORD_PINION_GEOMETRY_INDEX.items():
-      self._assert_row_matches_carspecs(car, idx)
+    for name, idx in FORD_PINION_GEOMETRY_INDEX.items():
+      if name not in FORD_HOST_ONLY_PLATFORMS:
+        self._assert_row_matches_carspecs(CAR(name), idx)
 
   def test_f150_uses_the_average_wheelbase(self):
     """#21: F-150s with lane centering come in 3.68 and 3.99 m wheelbases and nothing tells them
@@ -235,7 +237,7 @@ class TestFordBPPinionGeometryTable(unittest.TestCase):
 
   def test_other_platforms_use_carspecs(self):
     for car in FORD_PINION_GEOMETRY_INDEX:
-      if car in FORD_PINION_WHEELBASE:
+      if car in FORD_PINION_WHEELBASE or car in FORD_HOST_ONLY_PLATFORMS:
         continue
       CP = CarInterface.get_non_essential_params(car)
       with self.subTest(car=car):

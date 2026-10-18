@@ -6,7 +6,6 @@ See the LICENSE.md file in the root directory for more details.
 """
 
 from opendbc.car import structs
-from opendbc.car.ford.values import CAR
 from opendbc.car.lateral import AngleSteeringLimits
 
 
@@ -39,19 +38,25 @@ class FordSafetyFlagsSP:
 # this feature needs -- the toggle no-ops there and yaw behavior is kept.
 # Index 10 (FORD_MONDEO_MK5) is reserved but unmapped here: that platform exists in
 # BluePilot but not in this opendbc baseline. Indices stay aligned with the C table.
+# BluePilot: the per-platform tables key on the platform name (CP.carFingerprint), not the CAR enum,
+# so a row for a platform some host lacks never breaks import there; it just never matches.
+# FORD_HOST_ONLY_PLATFORMS lists the names with rows here that this repo's CAR doesn't have (each
+# with the hosts that do); every other name must be in CAR (tests/test_platform_tables.py).
+FORD_HOST_ONLY_PLATFORMS: frozenset[str] = frozenset()
+
 FORD_PINION_GEOMETRY_SHIFT = 1
 FORD_PINION_GEOMETRY_INDEX = {
-  CAR.FORD_BRONCO_SPORT_MK1: 1,
-  CAR.FORD_ESCAPE_MK4: 2,
-  CAR.FORD_ESCAPE_MK4_5: 3,
-  CAR.FORD_EXPEDITION_MK4: 4,
-  CAR.FORD_EXPLORER_MK6: 5,
-  CAR.FORD_FOCUS_MK4: 6,
-  CAR.FORD_F_150_LIGHTNING_MK1: 7,
-  CAR.FORD_F_150_MK14: 8,
-  CAR.FORD_MAVERICK_MK1: 9,
-  CAR.FORD_MUSTANG_MACH_E_MK1: 11,
-  CAR.FORD_RANGER_MK2: 12,
+  "FORD_BRONCO_SPORT_MK1": 1,
+  "FORD_ESCAPE_MK4": 2,
+  "FORD_ESCAPE_MK4_5": 3,
+  "FORD_EXPEDITION_MK4": 4,
+  "FORD_EXPLORER_MK6": 5,
+  "FORD_FOCUS_MK4": 6,
+  "FORD_F_150_LIGHTNING_MK1": 7,
+  "FORD_F_150_MK14": 8,
+  "FORD_MAVERICK_MK1": 9,
+  "FORD_MUSTANG_MACH_E_MK1": 11,
+  "FORD_RANGER_MK2": 12,
 }
 
 
@@ -98,7 +103,7 @@ def init_ford_safety_param_sp(CP: structs.CarParams, CP_SP: structs.CarParamsSP,
 # FORD_F_150_MK14: the trucks with lane centering come in 3.68 and 3.99 m wheelbases and nothing on
 # the car tells them apart; the average keeps either within about 4% (#21).
 FORD_PINION_WHEELBASE = {
-  CAR.FORD_F_150_MK14: 3.84,
+  "FORD_F_150_MK14": 3.84,
 }
 
 
@@ -155,3 +160,24 @@ BP_LATERAL_PARAMS = (
 # Lane change smoothing, both modes: speed breakpoints (m/s) and the low-speed factor
 LANE_CHANGE_FACTOR_BP = (4.4, 40.23)
 LANE_CHANGE_FACTOR_LOW = 0.95
+
+
+# Angle mode's per-platform high-speed gain defaults (low curvature, high curvature); any other
+# platform gets ANGLE_GAIN_CAN. Read by lateral_angle_ext.update_angle_params.
+# CAN vehicles (Escape MK4, Bronco Sport, Explorer, Maverick, Edge)
+ANGLE_GAIN_CAN = (1.00, 1.15)
+# CAN-FD body-on-frame trucks (F-150, Lightning, Expedition, Ranger)
+ANGLE_GAIN_CANFD_BOF = (0.95, 0.95)
+# CAN-FD unibody SUVs (Mustang Mach-E, Escape MK4.5)
+ANGLE_GAIN_CANFD_SUV = (1.00, 1.05)
+
+ANGLE_GAIN_CANFD_BOF_CARS = frozenset({
+  "FORD_F_150_MK14",
+  "FORD_F_150_LIGHTNING_MK1",
+  "FORD_EXPEDITION_MK4",
+  "FORD_RANGER_MK2",
+})
+ANGLE_GAIN_CANFD_SUV_CARS = frozenset({
+  "FORD_MUSTANG_MACH_E_MK1",
+  "FORD_ESCAPE_MK4_5",
+})

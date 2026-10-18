@@ -224,28 +224,11 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
   FORD_BP_DBG("%s: desired_path_angle: %d, path_angle_min_can: %d, path_angle_max_can: %d, violation: %d\n",
               dbg_prefix, desired_path_angle, path_angle_min_can, path_angle_max_can, (int)violation);
 
-  // Check angle error and steer_control_enabled for curvature. Angle mode holds curvature pinned
-  // at 0 while path_angle does the real steering, so the deviation-vs-measured portion of
-  // ford_bp_curvature_cmd_checks would eventually trip as the car actually turns (measured curvature
-  // moves, commanded curvature doesn't) -- skip applying it when desired_curvature == 0. Still call
-  // it to keep curvature_state.desired_last in sync, and path_angle keeps its own checks regardless. But
-  // ford_bp_curvature_cmd_checks also carries the controls_allowed gate; restore that piece
-  // explicitly so a steer_control_enabled frame at curvature == 0 can't bypass it.
-  // The message-rate check (rt_curvature_rate_limit_check) is discarded with the rest, so mirror it
-  // here. Read the window before the call: the call counts this frame and may roll the window.
-  bool rt_violation = false;
-  if ((controls_allowed || controls_allowed_lateral) && steer_control_enabled) {
-    const int max_rt_msgs = ((float)base->frequency * MAX_RT_INTERVAL / 1e6 * 1.2) + 1;  // as lateral.h
-    const uint32_t rt_msgs = curvature_state.rt_msgs + curvature_state.rt_msgs_prev;
-    rt_violation = (int)rt_msgs > max_rt_msgs;
-  }
-  bool curvature_violation = ford_bp_curvature_cmd_checks(desired_curvature, steer_control_enabled, limits);
-  if (desired_curvature != 0) {
-    violation |= curvature_violation;
-  } else {
-    violation |= steer_control_enabled && !(controls_allowed || controls_allowed_lateral);
-    violation |= rt_violation;
-  }
+  // Check the curvature command and steer_control_enabled. At curvature 0 (angle mode, where
+  // path_angle does the steering, and curvature mode's reset frame) ford_bp_curvature_cmd_checks skips
+  // its value checks itself and keeps the speed cross-check, message-rate check and controls gate;
+  // path_angle keeps its own checks regardless.
+  violation |= ford_bp_curvature_cmd_checks(desired_curvature, steer_control_enabled, limits);
   FORD_BP_DBG("%s: 1. desired_curvature violation: %d\n", dbg_prefix, (int)violation);
 
   // Angle mode's own deviation-only check against shadow_curvature, once angle mode is confirmed

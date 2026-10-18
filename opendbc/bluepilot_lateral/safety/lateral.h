@@ -84,11 +84,17 @@ static inline bool ford_bp_curvature_cmd_checks(int desired_curvature, bool stee
   speed_mismatch_check((float)vehicle_speed_2.values[0] / VEHICLE_SPEED_FACTOR);
 
   if ((controls_allowed || controls_allowed_lateral) && steer_control_enabled) {
-    // *** absolute curvature cap ***
-    violation |= safety_max_limit_check(desired_curvature, limits->base.max_curvature, -limits->base.max_curvature);
+    // BluePilot: curvature 0 is the no-curvature-command sentinel (angle mode steers with path_angle
+    // and holds curvature at 0; curvature mode's reset frame sends 0), so the value checks don't
+    // apply to it: the error band would trip as the car turns while the command stays at 0. The
+    // message-rate check and the gates below still run.
+    if (desired_curvature != 0) {
+      // *** absolute curvature cap ***
+      violation |= safety_max_limit_check(desired_curvature, limits->base.max_curvature, -limits->base.max_curvature);
 
-    // *** measured-table rate limits, error band and (CAN FD) lateral accel cap ***
-    violation |= ford_bp_curvature_rate_lookup_check(desired_curvature, limits);
+      // *** measured-table rate limits, error band and (CAN FD) lateral accel cap ***
+      violation |= ford_bp_curvature_rate_lookup_check(desired_curvature, limits);
+    }
 
     // *** real time rate limit check ***
     violation |= rt_curvature_rate_limit_check(limits->base);

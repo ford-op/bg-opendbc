@@ -44,6 +44,7 @@ from opendbc.bluepilot_lateral.core.values_ext import (
   BP_ANGLE_LIMITS, LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW,
 )
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
+from opendbc.bluepilot_lateral.params.manifest import value
 
 # DBC ``LatCtlPath_An_Actl`` (rad) — panda safety uses the same in ``ford.h``; PSCM enforces in firmware.
 FORD_DBC_PATH_ANGLE_MIN = -0.5
@@ -186,42 +187,18 @@ class LateralAngleExt:
       low, high = ANGLE_GAIN_CAN
     self.path_angle_gain_lowC_highV = low
     self.path_angle_gain_highC_highV = high
-    if params is not None and hasattr(params, "get"):
-      for attr, key, min_value, max_value in (
-        ("low_speed_curv_factor", "FordLowSpeedFactor_ang", 0.5, 1.5),
-        ("high_speed_curv_factor", "FordHighSpeedFactor_ang", 0.5, 1.5),
-        ("user_dampening_factor", "FordHighSpeedDampening_ang", 0.25, 1.25),
+    if params is not None:
+      for attr, key in (
+        ("low_speed_curv_factor", "FordLowSpeedFactor_ang"),
+        ("high_speed_curv_factor", "FordHighSpeedFactor_ang"),
+        ("user_dampening_factor", "FordHighSpeedDampening_ang"),
+        ("lane_change_factor_high_ang", "lane_change_factor_high_ang"),
+        # BluePilot: angle-mode lane centering trim (advanced lane positioning) params.
+        ("enable_lane_positioning_ang", "enable_lane_positioning_ang"),
+        ("custom_path_offset_ang", "custom_path_offset_ang"),
+        ("lane_centering_strength_ang", "lane_centering_strength_ang"),
       ):
-        try:
-          raw = params.get(key, return_default=True)
-          if raw is not None and raw != b"":
-            setattr(self, attr, float(clip(
-              float(raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw), min_value, max_value)))
-        except Exception:
-          pass
-      try:
-        raw = params.get("lane_change_factor_high_ang", return_default=True)
-        if raw is not None and raw != b"":
-          self.lane_change_factor_high_ang = float(clip(
-            float(raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw), 0.85, 1.50))
-      except Exception:
-        pass
-      # BluePilot: angle-mode lane centering trim (advanced lane positioning) params.
-      try:
-        self.enable_lane_positioning_ang = bool(params.get_bool("enable_lane_positioning_ang"))
-      except Exception:
-        pass
-      for attr, key, min_value, max_value in (
-        ("custom_path_offset_ang", "custom_path_offset_ang", -0.5, 0.5),
-        ("lane_centering_strength_ang", "lane_centering_strength_ang", 0.0, 1.0),
-      ):
-        try:
-          raw = params.get(key, return_default=True)
-          if raw is not None and raw != b"":
-            setattr(self, attr, float(clip(
-              float(raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw), min_value, max_value)))
-        except Exception:
-          pass
+        setattr(self, attr, value(params, key))
 
   def update_angle_strategy(self, CC, CS, actuators):
     """

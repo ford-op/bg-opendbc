@@ -4,14 +4,12 @@ lateral code already makes on openpilot's Params.
 
 Semantics match Params for a key the fork did not publish:
   get_bool(key)                    -> False   (Params: unset bool reads as False)
-  get(key)                         -> raises  (every caller falls back to its own default)
-  get(key, return_default=True)    -> None    (the angle-side callers keep their __init__
-                                               literals)
+  get(key)                         -> raises
+  get(key, return_default=True)    -> None
 
-A fork with the #6 change publishes every lateral key, using the params_keys.h default for one
-never written on the device, so these paths are then only reached if the fork and the key list
-drift. An older fork publishes only keys that are set. Every caller default equals the
-params_keys.h default, so the result is the same either way.
+The lateral code reads every setting through params/manifest.py's value(), which takes the
+manifest default for a key that is missing, empty or unparsable. A fork with the #6 change
+publishes every lateral key anyway, using its params_keys.h default for one never written.
 """
 
 

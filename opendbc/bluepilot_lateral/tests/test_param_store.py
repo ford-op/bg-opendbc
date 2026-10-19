@@ -2,7 +2,8 @@ import unittest
 
 from opendbc.car import structs
 from opendbc.bluepilot_lateral.params.param_store import ParamStore
-from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, _read_param
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt
+from opendbc.bluepilot_lateral.params.manifest import value
 from opendbc.bluepilot_lateral.core.values_ext import BP_LATERAL_PARAMS
 
 
@@ -19,17 +20,17 @@ class TestParamStore(unittest.TestCase):
   def test_reads_bool_int_float_like_params(self):
     ps = ParamStore.from_cc_sp(_cc_sp(disable_BP_lat_UI=b"1", custom_profile_curv=b"2", LC_PID_gain_UI_curv=b"3.5"))
     self.assertTrue(ps.get_bool("disable_BP_lat_UI"))
-    self.assertEqual(_read_param(ps, "custom_profile_curv", int, 0), 2)
-    self.assertEqual(_read_param(ps, "LC_PID_gain_UI_curv", float, 1.0), 3.5)
+    self.assertEqual(value(ps, "custom_profile_curv"), 2)
+    self.assertEqual(value(ps, "LC_PID_gain_UI_curv"), 3.5)
 
   def test_unset_keys_behave_like_params(self):
     ps = ParamStore.from_cc_sp(_cc_sp())
     # ParamStore mirrors Params: an unset bool reads as False, get() raises, get(return_default=True) is None
     self.assertFalse(ps.get_bool("enable_human_turn_detection_curv"))
     self.assertIsNone(ps.get("FordLowSpeedFactor_ang", return_default=True))
-    # _read_param gives the caller default for any key the fork did not publish, bools included
-    self.assertTrue(_read_param(ps, "enable_human_turn_detection_curv", bool, True))
-    self.assertEqual(_read_param(ps, "LC_PID_gain_UI_curv", float, 1.0), 1.0)
+    # the manifest default applies to any key the fork did not publish, bools included
+    self.assertTrue(value(ps, "enable_human_turn_detection_curv"))
+    self.assertEqual(value(ps, "LC_PID_gain_UI_curv"), 1.0)
 
   def test_empty_params_give_registry_defaults(self):
     """#6: with nothing published, the lateral runs the defaults the settings UI shows
@@ -55,8 +56,8 @@ class TestParamStore(unittest.TestCase):
     self.assertEqual(float(raw.decode() if isinstance(raw, bytes) else raw), 1.2)
 
   def test_key_list_is_consistent(self):
+    # the count is pinned against the manifest in test_settings_manifest.py
     self.assertEqual(len(BP_LATERAL_PARAMS), len(set(BP_LATERAL_PARAMS)))
-    self.assertEqual(len(BP_LATERAL_PARAMS), 18)
 
 
 if __name__ == "__main__":

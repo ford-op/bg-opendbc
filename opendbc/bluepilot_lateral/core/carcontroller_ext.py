@@ -19,7 +19,8 @@ from opendbc.car.ford.values import CarControllerParams, FordFlags
 from opendbc.car.vehicle_model import VehicleModel
 from opendbc.bluepilot_lateral.can import fordcan_ext
 from opendbc.bluepilot_lateral.core.lateral_angle_ext import LateralAngleExt
-from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl, _read_param
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl
+from opendbc.bluepilot_lateral.params.manifest import value
 from opendbc.bluepilot_lateral.params.param_store import ParamStore
 from opendbc.bluepilot_lateral.core.values_ext import FORD_PINION_WHEELBASE, FordSafetyFlagsSP
 from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
@@ -144,7 +145,7 @@ class BluePilotLateral:
     self.angle.update_angle_params(params)
     # One flag for every BP consumer (LatCtl dispatch, LKA angle-mode bits, mode reporting): the UI
     # toggle, and the panda bit that was set at init. No 4-signal traffic to a stock-configured panda.
-    self.disable_BP_lat_UI = _read_param(params, "disable_BP_lat_UI", bool, False) or not self.bp_lateral_allowed
+    self.disable_BP_lat_UI = value(params, "disable_BP_lat_UI") or not self.bp_lateral_allowed
     return not self.disable_BP_lat_UI
 
   def step_lateral(self, CC, CS, actuators, apply_curvature_last):

@@ -44,7 +44,7 @@ from opendbc.bluepilot_lateral.core.values_ext import (
   BP_ANGLE_LIMITS, LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW,
 )
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
-from opendbc.bluepilot_lateral.params.manifest import value
+from opendbc.bluepilot_lateral.params.manifest import default, value
 
 # DBC ``LatCtlPath_An_Actl`` (rad) — panda safety uses the same in ``ford.h``; PSCM enforces in firmware.
 FORD_DBC_PATH_ANGLE_MIN = -0.5
@@ -119,9 +119,24 @@ def pscm_d_ref_m(v_ego_ms: float) -> float:
   return d
 
 
+# the settings angle mode reads (params/manifest.py): (attribute, key)
+ANGLE_SETTINGS = (
+  ("low_speed_curv_factor", "FordLowSpeedFactor_ang"),
+  ("high_speed_curv_factor", "FordHighSpeedFactor_ang"),
+  ("user_dampening_factor", "FordHighSpeedDampening_ang"),
+  ("lane_change_factor_high_ang", "lane_change_factor_high_ang"),
+  ("enable_lane_positioning_ang", "enable_lane_positioning_ang"),  # the lane centering trim (lane_center_trim.py)
+  ("custom_path_offset_ang", "custom_path_offset_ang"),
+  ("lane_centering_strength_ang", "lane_centering_strength_ang"),
+)
+
+
 class LateralAngleExt:
   def __init__(self, CP, inputs, shared):
     self.CP = CP
+    # the user settings (updated from the host's params each frame), at their defaults until then
+    for attr, key in ANGLE_SETTINGS:
+      setattr(self, attr, default(key))
     # BluePilotLateral's LateralInputs (read) and SharedLateralState (read and written), common to both strategies
     self.inputs = inputs
     self.shared = shared
@@ -136,21 +151,12 @@ class LateralAngleExt:
     self.path_angle_gain_highC_highV = 1.0  # gain at high speed, high curvature
     self.bp_path_angle_gain_lowC_highV = 1.0
     self.bp_path_angle_gain_highC_highV = 1.0
-    # User-tunable "feel" multipliers: read from the angle-tuning Params below.
-    self.low_speed_curv_factor = 1.0
-    self.high_speed_curv_factor = 1.0
-    self.user_dampening_factor = 1.0
+    # Telemetry copies of the user "feel" multipliers (ANGLE_SETTINGS)
     self.bp_low_speed_curv_factor = 1.0
     self.bp_high_speed_curv_factor = 1.0
-    # BluePilot: angle mode's own lane-change scaling factor, independent of curvature mode's
-    # lane_change_factor_high_curv -- angle needs a boost (>1) where curvature needs a cut (<1).
-    self.lane_change_factor_high_ang = 1.0
     # BluePilot: angle-mode lane centering trim (advanced lane positioning) -- see
     # lane_center_trim.py and the module docstring above.
     self.lane_center_trim = LaneCenterTrim()
-    self.enable_lane_positioning_ang = False
-    self.custom_path_offset_ang = 0.0
-    self.lane_centering_strength_ang = 0.25
     # Telemetry: variable curvature lookup time used this frame (s)
     self.bp_curvature_lookup_time = _VLT_T_EXTRA_MAX + 0.3725  # warm start at ~0.5s
     # BluePilot: error-clipped kappa path_angle was derived from -- carcontroller_ext.py reads this as
@@ -188,16 +194,7 @@ class LateralAngleExt:
     self.path_angle_gain_lowC_highV = low
     self.path_angle_gain_highC_highV = high
     if params is not None:
-      for attr, key in (
-        ("low_speed_curv_factor", "FordLowSpeedFactor_ang"),
-        ("high_speed_curv_factor", "FordHighSpeedFactor_ang"),
-        ("user_dampening_factor", "FordHighSpeedDampening_ang"),
-        ("lane_change_factor_high_ang", "lane_change_factor_high_ang"),
-        # BluePilot: angle-mode lane centering trim (advanced lane positioning) params.
-        ("enable_lane_positioning_ang", "enable_lane_positioning_ang"),
-        ("custom_path_offset_ang", "custom_path_offset_ang"),
-        ("lane_centering_strength_ang", "lane_centering_strength_ang"),
-      ):
+      for attr, key in ANGLE_SETTINGS:
         setattr(self, attr, value(params, key))
 
   def update_angle_strategy(self, CC, CS, actuators):

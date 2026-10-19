@@ -16,6 +16,29 @@ def _store(**kv):
   return ParamStore.from_cc_sp(cc_sp)
 
 
+PARAMS_KEYS_H = [
+  '{"disable_BP_lat_UI", {PERSISTENT | BACKUP, BOOL, "0"}},',
+  '{"enable_human_turn_detection_curv", {PERSISTENT | BACKUP, BOOL, "1"}},',
+  '{"enable_lane_positioning_curv", {PERSISTENT | BACKUP, BOOL, "0"}},',
+  '{"enable_lane_full_mode_curv", {PERSISTENT | BACKUP, BOOL, "0"}},',
+  '{"enable_lane_positioning_ang", {PERSISTENT | BACKUP, BOOL, "0"}},',
+  '{"FordPrefLateralControl", {PERSISTENT | BACKUP, INT, "0"}},',
+  '{"custom_profile_curv", {PERSISTENT | BACKUP, INT, "0"}},',
+  '{"lane_change_factor_high_curv", {PERSISTENT | BACKUP, FLOAT, "0.85"}},',
+  '{"pc_blend_ratio_high_C_UI_curv", {PERSISTENT | BACKUP, FLOAT, "0.4"}},',
+  '{"pc_blend_ratio_low_C_UI_curv", {PERSISTENT | BACKUP, FLOAT, "0.4"}},',
+  '{"custom_path_offset_curv", {PERSISTENT | BACKUP, FLOAT, "0.0"}},',
+  '{"LC_PID_gain_UI_curv", {PERSISTENT | BACKUP, FLOAT, "1.0"}},',
+  '{"FordLowSpeedFactor_ang", {PERSISTENT | BACKUP, FLOAT, "1.0"}},',
+  '{"FordHighSpeedFactor_ang", {PERSISTENT | BACKUP, FLOAT, "1.0"}},',
+  '{"FordHighSpeedDampening_ang", {PERSISTENT | BACKUP, FLOAT, "1.0"}},',
+  '{"lane_change_factor_high_ang", {PERSISTENT | BACKUP, FLOAT, "1.0"}},',
+  '{"custom_path_offset_ang", {PERSISTENT | BACKUP, FLOAT, "0.0"}},',
+  '{"lane_centering_strength_ang", {PERSISTENT | BACKUP, FLOAT, "0.25"}},',
+  '{"FordPrefSteerAngleCurvature", {PERSISTENT | BACKUP, BOOL, "0"}},',
+]
+
+
 class TestSettingsManifest(unittest.TestCase):
   def test_entries_are_consistent(self):
     keys = [s.key for s in SETTINGS]
@@ -61,11 +84,22 @@ class TestSettingsManifest(unittest.TestCase):
     self.assertIs(startup_value({}, "FordPrefSteerAngleCurvature"), False)
 
   def test_params_keys_lines(self):
-    lines = manifest.params_keys_lines()
-    self.assertEqual(len(lines), len(SETTINGS))
-    self.assertTrue('{"FordPrefLateralControl", {PERSISTENT | BACKUP, INT, "0"}},' in lines)
-    self.assertTrue('{"enable_human_turn_detection_curv", {PERSISTENT | BACKUP, BOOL, "1"}},' in lines)
-    self.assertTrue('{"lane_change_factor_high_curv", {PERSISTENT | BACKUP, FLOAT, "0.85"}},' in lines)
+    """Pins every key, type and default: these are bp-sunnypilot's params_keys.h lines (#6), so a typo
+    in a default can't change what the car runs unnoticed."""
+    self.assertEqual(manifest.params_keys_lines(), PARAMS_KEYS_H)
+
+  def test_clamped_ranges(self):
+    """The bounds the library clamps to (the angle-mode factors, as BluePilot's own fork does)."""
+    self.assertEqual({s.key: s.range for s in SETTINGS if s.clamp}, {
+      "FordLowSpeedFactor_ang": (0.5, 1.5), "FordHighSpeedFactor_ang": (0.5, 1.5), "FordHighSpeedDampening_ang": (0.25, 1.25),
+      "lane_change_factor_high_ang": (0.85, 1.5), "custom_path_offset_ang": (-0.5, 0.5), "lane_centering_strength_ang": (0.0, 1.0),
+    })
+
+  def test_read_kind_is_enforced(self):
+    with self.assertRaises(AssertionError):
+      value(_store(), "FordPrefSteerAngleCurvature")  # startup only
+    with self.assertRaises(AssertionError):
+      startup_value({}, "FordLowSpeedFactor_ang")  # per frame only
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ gives the default.
 `python -m opendbc.bluepilot_lateral.params.manifest` prints the lines for a host's params_keys.h.
 """
 from dataclasses import dataclass
+from typing import Literal
 
 STARTUP, PER_FRAME, BOTH = "startup", "per-frame", "both"
 
@@ -20,7 +21,7 @@ class Setting:
   key: str
   type: type
   default: bool | int | float
-  read: str  # STARTUP, PER_FRAME or BOTH
+  read: Literal["startup", "per-frame", "both"]
   label: str
   description: str
   range: tuple[float, float] | None = None  # the UI's limits
@@ -41,6 +42,7 @@ SETTINGS: tuple[Setting, ...] = (
   Setting("FordPrefLateralControl", int, 0, PER_FRAME, "Primary Control Variable",
           "Curvature matches the existing strategy. Angle uses path_angle as the main actuator (in development).",
           range=(0, 1)),
+  # an on/off toggle in the UI, stored as INT
   Setting("custom_profile_curv", int, 0, PER_FRAME, "Use Custom Tuning Profile",
           "Enable custom tuning profile settings.", range=(0, 1)),
   Setting("lane_change_factor_high_curv", float, 0.85, PER_FRAME, "Lane Change Factor High",
@@ -102,16 +104,22 @@ def _parse(setting: Setting, raw):
   return v
 
 
+def default(key: str):
+  return _BY_KEY[key].default
+
+
 def value(params, key: str):
   """A per-frame setting from the CarControlSP.params ParamStore."""
   setting = _BY_KEY[key]
-  v = _parse(setting, params.get(key, return_default=True))
+  assert setting.read != STARTUP, f"{key} is read at startup only: hosts don't publish it per frame"
+  v = _parse(setting, params.get(key))
   return setting.default if v is None else v
 
 
 def startup_value(params_dict: dict, key: str):
   """A startup setting from get_car's params dict (values as Params returned them)."""
   setting = _BY_KEY[key]
+  assert setting.read != PER_FRAME, f"{key} is read per frame only: hosts don't pass it at startup"
   v = _parse(setting, params_dict.get(key))
   return setting.default if v is None else v
 

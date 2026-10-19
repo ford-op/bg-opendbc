@@ -27,7 +27,13 @@ from opendbc.car.lateral import ISO_LATERAL_ACCEL, apply_std_steer_angle_limits
 from opendbc.car.ford.values import CarControllerParams, FordFlags
 from opendbc.bluepilot_lateral.core.values_ext import BP_ANGLE_LIMITS, CURVATURE_MAX, LANE_CHANGE_FACTOR_BP, LANE_CHANGE_FACTOR_LOW
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
-from opendbc.bluepilot_lateral.params.manifest import value
+from opendbc.bluepilot_lateral.params.manifest import default, value
+
+
+# the settings curvature mode reads (params/manifest.py), each kept as an attribute of the same name
+CURV_SETTINGS = ("enable_human_turn_detection_curv", "lane_change_factor_high_curv", "pc_blend_ratio_high_C_UI_curv",
+                 "pc_blend_ratio_low_C_UI_curv", "enable_lane_positioning_curv", "custom_path_offset_curv",
+                 "enable_lane_full_mode_curv", "custom_profile_curv", "LC_PID_gain_UI_curv")
 
 
 class PrimaryLateralControl(IntEnum):
@@ -115,10 +121,9 @@ class LateralCurvExt:
     # Primary lateral control variable: consumed by BluePilotLateral's lateral dispatch.
     self.primary_lateral_control = PrimaryLateralControl.curvature
 
-    # Toggles (updated from Params each frame)
-    self.enable_human_turn_detection_curv = True
-    self.enable_lane_positioning_curv = False
-    self.custom_profile_curv = 0
+    # Settings (updated from the host's params each frame), at their defaults until then
+    for key in CURV_SETTINGS:
+      setattr(self, key, default(key))
 
     # Precision/ramp control (precision_type is in the shared state)
     self.lateralUncertainty = 0.0
@@ -131,11 +136,8 @@ class LateralCurvExt:
     self.pc_blend_ratio_high = 0.40
     self.pc_blend_ratio_low_C = 0.40   # from UI when custom_profile_curv == 1
     self.pc_blend_ratio_high_C = 0.40  # from UI when custom_profile_curv == 1
-    self.pc_blend_ratio_low_C_UI_curv = 0.40   # set by update_lateral_params()
-    self.pc_blend_ratio_high_C_UI_curv = 0.40  # set by update_lateral_params()
 
     # Lane change smoothing
-    self.lane_change_factor_high_curv = 0.85  # updated from UI
     self.lane_change = False
     self.lane_change_last = False
 
@@ -152,15 +154,12 @@ class LateralCurvExt:
     self.reset_steering_last = False
 
     # Path offset
-    self.custom_path_offset_curv = 0.0  # from UI
     self.path_offset_lookup_time = 0.2  # seconds
     self.min_laneline_confidence_bp = [0.6, 0.8]
-    self.enable_lane_full_mode_curv = False
 
     # PID-based path angle for lane centering
     self.path_angle_filter_samples = 3
     self.path_angle_deque = deque(maxlen=self.path_angle_filter_samples)
-    self.LC_PID_gain_UI_curv = 1.0
     self.LC_PID_k_p = 0.25
     self.LC_PID_k_i = 0.05
     self.LC_PID_controller = PIDController(k_p=self.LC_PID_k_p, k_i=self.LC_PID_k_i, rate=20)
@@ -181,9 +180,7 @@ class LateralCurvExt:
 
   def update_lateral_params(self, params):
     """Read lateral-related Params from the UI. Called each frame."""
-    for key in ("enable_human_turn_detection_curv", "lane_change_factor_high_curv", "pc_blend_ratio_high_C_UI_curv",
-                "pc_blend_ratio_low_C_UI_curv", "enable_lane_positioning_curv", "custom_path_offset_curv",
-                "enable_lane_full_mode_curv", "custom_profile_curv", "LC_PID_gain_UI_curv"):
+    for key in CURV_SETTINGS:
       setattr(self, key, value(params, key))
 
     self.primary_lateral_control = PrimaryLateralControl(value(params, "FordPrefLateralControl"))

@@ -13,13 +13,14 @@ CURVATURE_TO_CAN = 50000  # curvature CAN units per 1/m (FORD_LIMITS .curvature_
 
 
 def _c_define(text, name):
-  m = re.search(rf"#define {name}\s+([0-9.x]+)[Uf]?\b", text)
+  m = re.search(rf"#define {name}\s+(0x[0-9A-Fa-f]+|[0-9.]+)[Uf]?\b", text)
   assert m, name
   return float(m.group(1)) if "." in m.group(1) else int(m.group(1), 0)
 
 
 def _dbc_bits(sig):
   """Bit indices (byte * 8 + bit) a big-endian DBC signal occupies."""
+  assert not sig.is_little_endian, sig.name  # Lane_Assist_Data1's signals are all big-endian
   bits, b = set(), sig.msb
   for _ in range(sig.size):
     bits.add(b)

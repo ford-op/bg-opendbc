@@ -3,9 +3,9 @@
 BluePilot Ford lateral, angle mode: the shadow-curvature plausibility check.
 
 In angle mode the LatCtl curvature signal is held at 0 and the command rides on path_angle.
-Lane_Assist_Data1 carries a side channel (byte 4 bit 0: angle mode engaged; bytes 5-6: the
-curvature the controller would have commanded, "shadow curvature") that the panda checks
-against the yaw-measured curvature with the same error window as curvature mode
+Lane_Assist_Data1 carries a side channel (angle mode engaged, and the curvature the controller
+would have commanded, "shadow curvature"; layout in opendbc/bluepilot_lateral/can/LANE_ASSIST_DATA1.md)
+that the panda checks against the yaw-measured curvature with the same error window as curvature mode
 (ford_shadow_curvature_error_check, ford.h). Ported from BluePilot's earlier vendored tests.
 """
 import unittest

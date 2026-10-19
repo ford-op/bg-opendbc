@@ -43,7 +43,7 @@ const AngleSteeringParams ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS] = {
 };
 
 bool ford_bp_angle_mode_engaged = false;
-int16_t ford_bp_shadow_curvature_raw = 0;  // wire units, scale 1e-6 1/m (see fordcan_ext.py)
+int16_t ford_bp_shadow_curvature_raw = 0;  // wire units, scale 1e-6 1/m (LANE_ASSIST_DATA1.md)
 
 int desired_path_angle_last = 0;
 int desired_path_offset_last = 0;
@@ -335,8 +335,8 @@ static inline bool ford_bp_lmc_tx(bool canfd, unsigned int raw_curvature, unsign
 }
 
 // BluePilot: angle_mode_engaged and shadow_curvature ride in Lane_Assist_Data1 bits with no DBC
-// signal mapped to them (byte 4 bit 0, bytes 5-6; unused on real F-150 routes; fordcan_ext.py's
-// create_lka_msg has the layout), read out of the frame being sent. A separate CAN message (0x5F0)
+// signal mapped to them (layout: opendbc/bluepilot_lateral/can/LANE_ASSIST_DATA1.md), read out of
+// the frame being sent. A separate CAN message (0x5F0)
 // was tried first: the panda never receives its own TX, and an RX check for it tripped
 // safety_tick's lagging check and blocked controls car-wide (2026-07-09).
 static inline void ford_bp_lka_tx(const CANPacket_t *msg) {

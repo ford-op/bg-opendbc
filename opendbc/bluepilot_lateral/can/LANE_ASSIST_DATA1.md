@@ -42,11 +42,16 @@ Bit numbers are within the byte, 7 = most significant. Stock signals are from `f
 
 ## What the panda does
 
-- It latches both fields from every `Lane_Assist_Data1` frame it sends.
-- Only when angle mode is engaged and the `LateralMotionControl2` curvature is 0, it scales the
-  shadow curvature by 0.05 to curvature CAN units (2e-5 1/m) and blocks the frame if it is outside
-  the measured curvature ± the curvature error band (`ford_shadow_curvature_error_check`, above
-  10 m/s). It has no rate limit of its own: path angle has its own.
+- It latches both fields from every `Lane_Assist_Data1` frame that goes through its TX hook,
+  including one it blocks for another reason.
+- **Angle mode engaged widens the path-angle range.** While the flag is set, the lateral command's
+  path angle may use the DBC's full range (-0.5 to 0.5235 rad); otherwise it is held to ±0.25 rad
+  (`ford_lmc_checks`). The flag alone does it: curvature 0 without the flag keeps the tight range.
+- **The shadow curvature check.** For a lateral command (`LateralMotionControl` on CAN or
+  `LateralMotionControl2` on CAN FD) with curvature 0, steering enabled and the flag set, the
+  panda scales the shadow curvature by 0.05 to curvature CAN units (2e-5 1/m, truncated toward
+  zero) and, above 10 m/s, blocks the frame if it is outside the measured curvature ± the curvature
+  error band + 1 (`ford_shadow_curvature_error_check`). It has no rate limit: path angle has its own.
 - `ford_bp_init` clears the flag.
 
 ## Not here yet

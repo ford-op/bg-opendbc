@@ -75,7 +75,10 @@ jobs:
 
         # 3. Open or refresh the one sync PR (head = the mirror itself).
         base=$(git merge-base "$up" "$integration")
-        conflicts=$(git merge-tree --write-tree --name-only --no-messages "$integration" "$up" | tail -n +2 | sed 's/^/- /' || true)
+        out=$(git merge-tree --write-tree --name-only --no-messages "$integration" "$up") || true
+        # exit 1 means conflicts or an error; only a real result starts with the merged tree's ID
+        grep -qE '^[0-9a-f]{40}$' <<<"$(head -n1 <<<"$out")" || { echo "::error::merge-tree failed"; exit 1; }
+        conflicts=$(tail -n +2 <<<"$out" | sed 's/^/- /')
         {
           echo "Automated nightly sync of sunnypilot/opendbc \`master\` into \`$INTEGRATION\` (#18). Upstream \`${base:0:8}..${up:0:8}\`."
           echo

@@ -254,8 +254,7 @@ static inline bool ford_lmc_checks(int desired_curvature, int desired_curvature_
   // no shadow-curvature check; it's still bounded by the tight path_angle range above and
   // steer_control_enabled's own checks.
   if ((desired_curvature == 0) && ford_bp_angle_mode_engaged) {
-    // shadow_curvature raw scale 1e-6 -> CAN units (2e-5): * 0.05
-    const float shadow_curvature_scaled = (float)ford_bp_shadow_curvature_raw * 0.05f;
+    const float shadow_curvature_scaled = (float)ford_bp_shadow_curvature_raw * FORD_BP_LKA_SHADOW_RAW_TO_CAN;
     int shadow_curvature_can = (int)shadow_curvature_scaled;
     violation |= ford_shadow_curvature_error_check(shadow_curvature_can, steer_control_enabled, *base);
   }
@@ -341,8 +340,8 @@ static inline bool ford_bp_lmc_tx(bool canfd, unsigned int raw_curvature, unsign
 // was tried first: the panda never receives its own TX, and an RX check for it tripped
 // safety_tick's lagging check and blocked controls car-wide (2026-07-09).
 static inline void ford_bp_lka_tx(const CANPacket_t *msg) {
-  ford_bp_angle_mode_engaged = (msg->data[4] & 0x1U) != 0U;
-  unsigned int shadow_curvature_raw = (msg->data[5] << 8) | msg->data[6];
+  ford_bp_angle_mode_engaged = (msg->data[FORD_BP_LKA_ANGLE_MODE_BYTE] & FORD_BP_LKA_ANGLE_MODE_MASK) != 0U;
+  unsigned int shadow_curvature_raw = (msg->data[FORD_BP_LKA_SHADOW_MSB_BYTE] << 8) | msg->data[FORD_BP_LKA_SHADOW_LSB_BYTE];
   ford_bp_shadow_curvature_raw = (int16_t)shadow_curvature_raw;
 }
 

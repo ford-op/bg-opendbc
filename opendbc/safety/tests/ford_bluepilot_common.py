@@ -17,7 +17,9 @@ from pathlib import Path
 import numpy as np
 
 from opendbc.car.structs import CarParams
+from opendbc.car.ford.fordcan import CanBus
 from opendbc.car.ford.values import FordSafetyFlags
+from opendbc.bluepilot_lateral.can import fordcan_ext
 from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
 from opendbc.safety.tests.libsafety import libsafety_py
 from opendbc.safety.tests.common import CANPackerSafety
@@ -256,15 +258,9 @@ class BPFordTestCase(unittest.TestCase):
   def meas(self) -> tuple[int, int]:
     return int(self.safety.get_curvature_meas_min()), int(self.safety.get_curvature_meas_max())
 
-  def lka_bp_status_msg(self, angle_mode_engaged: bool, shadow_curvature: float, action: int = 0):
-    """Lane_Assist_Data1 with BluePilot's angle-mode side channel: bit 0 of byte 4 = angle mode
-    engaged, bytes 5-6 = shadow curvature, int16 big-endian, scale 1e-6 rad/m (fordcan_ext.py)."""
-    values = {"LkaActvStats_D2_Req": action}
-    addr, dat, bus = self.stock.packer.make_can_msg("Lane_Assist_Data1", 0, values)
-    dat = bytearray(dat)
-    raw = int(round(shadow_curvature / 1e-6))
-    raw = max(-32768, min(32767, raw)) & 0xFFFF
-    dat[4] |= 1 if angle_mode_engaged else 0
-    dat[5] = (raw >> 8) & 0xFF
-    dat[6] = raw & 0xFF
+  def lka_bp_status_msg(self, angle_mode_engaged: bool, shadow_curvature: float):
+    """Lane_Assist_Data1 with BluePilot's angle-mode side channel (can/LANE_ASSIST_DATA1.md), built by
+    the real packer, so every angle-mode test runs Python's packing through the panda's decode."""
+    addr, dat, bus = fordcan_ext.create_lka_msg(self.stock.packer, CanBus(fingerprint={}), False, None, angle_mode_engaged,
+                                                 shadow_curvature)
     return libsafety_py.make_CANPacket(addr, bus, bytes(dat))

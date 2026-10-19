@@ -12,7 +12,13 @@ BluePilot's fordcan_ext.py are out of scope here.
 from opendbc.car.ford.fordcan import CanBus, calculate_lat_ctl2_checksum
 
 
-_BP_LKA_SHADOW_CURVATURE_SCALE = 1e-6  # 1/meter per raw unit, matches ford.h's decode
+# BluePilot: the Lane_Assist_Data1 side channel, see LANE_ASSIST_DATA1.md. ford_declarations.h has the
+# same values (tests/test_lane_assist_data1.py).
+BP_LKA_ANGLE_MODE_BYTE = 4
+BP_LKA_ANGLE_MODE_MASK = 0x1
+BP_LKA_SHADOW_MSB_BYTE = 5  # shadow curvature: int16, big-endian, bytes 5-6
+BP_LKA_SHADOW_LSB_BYTE = 6
+BP_LKA_SHADOW_CURVATURE_SCALE = 1e-6  # 1/meter per raw unit
 
 
 def create_lka_msg(packer, CAN: CanBus, lat_active: bool, hud_control,
@@ -23,31 +29,20 @@ def create_lka_msg(packer, CAN: CanBus, lat_active: bool, hud_control,
   BluePilot extension: accepts lat_active and hud_control parameters for future
   lane departure warning integration (unused so far).
 
-  Also carries angle_mode_engaged + shadow_curvature packed into bits with no DBC signal mapped to
-  them -- confirmed unused (always 0, no cabana signal) on real F-150 dashcam routes. This message
-  is one openpilot itself originates every cycle, and ford_tx_hook already reads other fields
-  (LkaActvStats_D2_Req) directly out of these same bytes synchronously, in the same tx_hook call --
-  no separate CAN ID, no RX round-trip needed (panda does not self-receive its own TX, confirmed
-  2026-07-09 investigating a controlsMismatch caused by an earlier dedicated-message design).
-
-  Byte layout (bits not covered by any Lane_Assist_Data1 DBC signal):
-    byte 4 bit 0:     angle_mode_engaged
-    byte 4 bits 1-4:  reserved (future bools)
-    byte 5-6:         shadow_curvature (int16, scale 1e-6 1/m)
-    byte 7:           reserved (future value)
-  Must match the decode in ford.h's FORD_Lane_Assist_Data1 tx_hook check exactly.
+  Also carries angle_mode_engaged + shadow_curvature (Ford sign) in bits with no DBC signal: the
+  layout and what the panda does with them are in LANE_ASSIST_DATA1.md.
 
   Frequency is 33Hz.
   """
   addr, dat, bus = packer.make_can_msg("Lane_Assist_Data1", CAN.main, {})
   dat = bytearray(dat)
 
-  shadow_curvature_raw = int(round(shadow_curvature / _BP_LKA_SHADOW_CURVATURE_SCALE))
+  shadow_curvature_raw = int(round(shadow_curvature / BP_LKA_SHADOW_CURVATURE_SCALE))
   shadow_curvature_raw = max(-32768, min(32767, shadow_curvature_raw)) & 0xFFFF
 
-  dat[4] |= 1 if angle_mode_engaged else 0
-  dat[5] = (shadow_curvature_raw >> 8) & 0xFF
-  dat[6] = shadow_curvature_raw & 0xFF
+  dat[BP_LKA_ANGLE_MODE_BYTE] |= BP_LKA_ANGLE_MODE_MASK if angle_mode_engaged else 0
+  dat[BP_LKA_SHADOW_MSB_BYTE] = (shadow_curvature_raw >> 8) & 0xFF
+  dat[BP_LKA_SHADOW_LSB_BYTE] = shadow_curvature_raw & 0xFF
 
   return addr, bytes(dat), bus
 

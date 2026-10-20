@@ -8,9 +8,9 @@ A host is an opendbc fork (sunnypilot/opendbc today) with this library at `opend
 
 | file | what the hook does |
 |---|---|
-| `opendbc/car/ford/carcontroller.py` | Builds one `BluePilotLateral(CP, CP_SP, packer, CAN)`. Each frame `bp.update(CC_SP, frame)` says whether BluePilot lateral is active; if it is, `bp.step_lateral` sends the steering message at `STEER_STEP` (and returns the curvature to pass back next time) and `bp.step_lka` sends Lane_Assist_Data1 at `LKA_STEP`. Otherwise the stock path runs. |
+| `opendbc/car/ford/carcontroller.py` | Builds one `BluePilotLateral(CP, CP_SP, packer, CAN)`, the sunnypilot adapter (`hosts/sunnypilot/lateral.py`, below). Each frame `bp.update(CC_SP, frame)` says whether BluePilot lateral is active; if it is, `bp.step_lateral` sends the steering message at `STEER_STEP` (and returns the curvature to pass back next time) and `bp.step_lka` sends Lane_Assist_Data1 at `LKA_STEP`. Otherwise the stock path runs. |
 | `opendbc/car/structs.py` | Imports `LateralInputs` from `host_types.py` and adds `CarControlSP.lateralInputs`. |
-| `opendbc/sunnypilot/car/interfaces.py` | Calls `values_ext.init_ford_safety_param_sp(CP, CP_SP, params_dict)` at car init: the startup safety bits below. |
+| `opendbc/sunnypilot/car/interfaces.py` | Calls `init_ford_safety_param_sp(CP, CP_SP, params_dict)` (`hosts/sunnypilot/safety_param.py`) at car init: the startup safety bits below. |
 | `opendbc/safety/modes/ford.h` | Includes `safety/ford.h` and makes one call per hook site: counter and quality checks for the pinion message, the yaw measurement skipped while the pinion source is on, `ford_bp_rx_hook` (pinion measurement), `ford_bp_lka_tx` (angle-mode state from Lane_Assist_Data1), `ford_bp_lmc_tx` in place of the stock steering check when `BP_LATERAL` is set (the stock check runs unchanged when it isn't), and the pinion RX check list from `ford_bp_init`. |
 | `opendbc/safety/tests/test_bluepilot_lateral.py` | New: hands the library's `safety/tests/` to upstream's test discovery, so upstream's `test.sh` and `mutation.py` run the BluePilot safety tests. |
 
@@ -28,7 +28,7 @@ A host is an opendbc fork (sunnypilot/opendbc today) with this library at `opend
 | `lateralDelay` | `lateralDelay.lateralDelay` |
 | `valid` | true only when both the model and the vehicle parameters have been seen and every field above is filled |
 
-On a frame that isn't valid, or whose arrays aren't the full shape or contain a non-finite value, the library keeps the previous inputs.
+Each path array has `host_types.MODEL_PATH_POINTS` (33) entries at the times in `host_types.MODEL_T_IDXS` (openpilot's `ModelConstants.T_IDXS`): the core interpolates over that grid. On a frame that isn't valid, or whose arrays aren't the full shape or contain a non-finite value, the library keeps the previous inputs.
 
 ## Every frame: settings
 
@@ -36,7 +36,7 @@ On a frame that isn't valid, or whose arrays aren't the full shape or contain a 
 
 ## At startup: the safety bits
 
-`init_ford_safety_param_sp` reads the startup settings from `params_dict` (`disable_BP_lat_UI`, `FordPrefSteerAngleCurvature`) and sets bits on `CP_SP.safetyParam`, which the host sends to the panda as its sunnypilot safety param:
+`values_ext.ford_safety_param(CP, params_dict)` reads the startup settings (`disable_BP_lat_UI`, `FordPrefSteerAngleCurvature`) and returns the bits. The host sends them to the panda in its second safety param (sunnypilot: the adapter ORs them into `CP_SP.safetyParam`):
 
 | bit | |
 |---|---|
@@ -70,7 +70,20 @@ Every host is an opendbc fork, so the library uses these directly:
 - The safety headers use `modes/ford.h`'s Ford constants and upstream's safety helpers. `safety/lateral.h` and `can/fordcan_ext.py` copy four upstream functions, pinned by `tests/test_bluepilot_upstream_copies.py`, so a host where one changed fails that test.
 - The safety tests use upstream's test harness: `opendbc.safety.tests.test_ford`, `common` and `libsafety.libsafety_py`.
 
-The library's own types for the settings and the startup bits are a `ParamStore` built from (key, value) pairs and a plain integer. Today the core still reads them from sunnypilot's `CC_SP` and `CP_SP` directly.
+
+## The core's API, and the sunnypilot adapter
+
+The core takes only the library's types:
+
+- `core.carcontroller_ext.BluePilotLateral(CP, safety_param, packer, CAN)`: `safety_param` is the startup bits (`ford_safety_param`).
+- `update(inputs, params, frame)`: `inputs` is a `host_types.LateralInputs`, `params` a `params.param_store.ParamStore` built from the frame's (key, value) settings. Then `step_lateral`, `step_lka` and `status()` as above.
+
+Nothing under `core/`, `can/`, `params/` or `safety/` imports a host (`tests/test_core_imports.py`). `hosts/sunnypilot/` is the one adapter:
+
+- `lateral.py`: a `BluePilotLateral` subclass with sunnypilot's types, `(CP, CP_SP, packer, CAN)` and `update(CC_SP, frame)`. It passes `CP_SP.safetyParam`, `CC_SP.lateralInputs` and the `CC_SP.params` entries as (key, value) pairs.
+- `safety_param.py`: `init_ford_safety_param_sp(CP, CP_SP, params_dict)` ORs `ford_safety_param` into `CP_SP.safetyParam`. Its own module, so car init imports only `values_ext`.
+
+Another host writes its own adapter against the same API.
 
 ## Running the tests
 

@@ -3,7 +3,7 @@ import unittest
 from opendbc.car import structs
 from opendbc.bluepilot_lateral.params.param_store import ParamStore
 from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral import params_from_cc_sp
-from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt
+from opendbc.bluepilot_lateral.core.lateral_curv_ext import LateralCurvExt, PrimaryLateralControl
 from opendbc.bluepilot_lateral.params.manifest import value
 from opendbc.bluepilot_lateral.core.values_ext import BP_LATERAL_PARAMS
 
@@ -45,6 +45,16 @@ class TestParamStore(unittest.TestCase):
     # a published value still wins
     LateralCurvExt.update_lateral_params(ext, ParamStore(dict(enable_human_turn_detection_curv=b"0").items()))
     self.assertFalse(ext.enable_human_turn_detection_curv)
+
+  def test_lateral_mode_outside_the_enum_falls_back_to_curvature(self):
+    """#66: a mode other than 0 or 1 is curvature mode, the default, instead of raising every frame.
+    Text that isn't a number already was; 0 and 1 are unchanged."""
+    ext = type("Ext", (), {})()
+    for published, expected in ((b"0", PrimaryLateralControl.curvature), (b"1", PrimaryLateralControl.angle),
+                                (b"2", PrimaryLateralControl.curvature), (b"-1", PrimaryLateralControl.curvature),
+                                (b"angle", PrimaryLateralControl.curvature)):
+      LateralCurvExt.update_lateral_params(ext, ParamStore(dict(FordPrefLateralControl=published).items()))
+      self.assertIs(ext.primary_lateral_control, expected, published)
 
   def test_bool_wire_format(self):
     # the fork publishes bools as "1"/"0"

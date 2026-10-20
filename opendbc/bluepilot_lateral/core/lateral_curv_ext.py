@@ -183,7 +183,10 @@ class LateralCurvExt:
     for key in CURV_SETTINGS:
       setattr(self, key, value(params, key))
 
-    self.primary_lateral_control = PrimaryLateralControl(value(params, "FordPrefLateralControl"))
+    try:
+      self.primary_lateral_control = PrimaryLateralControl(value(params, "FordPrefLateralControl"))
+    except ValueError:  # a mode other than 0 or 1: curvature mode, the default (#66)
+      self.primary_lateral_control = PrimaryLateralControl.curvature
 
   def update(self, CC, CS, actuators, apply_curvature_last, CP):
     """

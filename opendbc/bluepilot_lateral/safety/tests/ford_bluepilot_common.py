@@ -186,7 +186,7 @@ def pinion_geometry_table() -> dict[int, tuple[float, float, float]]:
   """ford_pinion_geometry from opendbc/bluepilot_lateral/safety/ford.h as {index: (slip_factor, steer_ratio,
   wheelbase)}. Read from source: libsafety exposes no getters for it and adding some would touch
   upstream's harness."""
-  bp = Path(__file__).resolve().parents[2] / "bluepilot_lateral" / "safety"
+  bp = Path(__file__).resolve().parents[1]
   src = (bp / "ford.h").read_text()
   body = src[src.index("ford_pinion_geometry[FORD_PINION_GEOMETRY_ROWS] = {"):]
   body = body[:body.index("};")]

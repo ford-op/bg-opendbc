@@ -10,7 +10,7 @@ import unittest
 
 import opendbc.safety.tests.common as common
 
-from opendbc.safety.tests.ford_bluepilot_common import (
+from opendbc.bluepilot_lateral.safety.tests.ford_bluepilot_common import (
   BPFordTestCase, angle_roc_delta, SMALL_ANGLE, FORMER_LATCH_WINDOW_FRAMES, CURVATURE_SIGNAL_MAX_CAN,
   CURVATURE_TO_CAN, MAX_CURVATURE_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_ERROR_MIN_SPEED,
   PATH_ANGLE_TO_CAN, PATH_ANGLE_MAX_CAN, PATH_ANGLE_DBC_MIN_CAN, PATH_ANGLE_DBC_MAX_CAN,

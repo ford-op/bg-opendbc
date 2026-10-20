@@ -3,7 +3,8 @@
 
 Upstream's run only mutates code from files under opendbc/safety/, and the BluePilot headers live in
 the library (opendbc/bluepilot_lateral/safety/). This points the same run at them; the killer tests
-are the ones mutation.py already discovers in opendbc/safety/tests/. Same options as mutation.py."""
+are the ones mutation.py already discovers in opendbc/safety/tests/, the BluePilot ones through the
+loader there (test_bluepilot_lateral.py). Same options as mutation.py."""
 import sys
 
 from opendbc.safety.tests import mutation

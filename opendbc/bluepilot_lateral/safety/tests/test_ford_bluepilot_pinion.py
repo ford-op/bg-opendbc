@@ -22,10 +22,10 @@ from opendbc.bluepilot_lateral.core.values_ext import (
 )
 from opendbc.bluepilot_lateral.core.carcontroller_ext import pinion_vehicle_model
 from opendbc.car.ford.interface import CarInterface
-from opendbc.safety.tests.ford_bluepilot_common import (
+from opendbc.bluepilot_lateral.safety.tests.ford_bluepilot_common import (
   CURVATURE_TO_CAN, CURVATURE_ERROR_MIN_SPEED, MAX_CURVATURE_ERROR_CAN_PINION, pinion_geometry_table,
 )
-from opendbc.safety.tests import test_ford_bluepilot_matrix as matrix
+from opendbc.bluepilot_lateral.safety.tests import test_ford_bluepilot_matrix as matrix
 
 
 def pinion_param_sp(geometry_index: int) -> int:

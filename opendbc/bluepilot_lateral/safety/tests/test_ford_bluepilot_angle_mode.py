@@ -10,7 +10,7 @@ that the panda checks against the yaw-measured curvature with the same error win
 """
 import unittest
 
-from opendbc.safety.tests.ford_bluepilot_common import (
+from opendbc.bluepilot_lateral.safety.tests.ford_bluepilot_common import (
   BPFordTestCase, SMALL_ANGLE, FORMER_LATCH_WINDOW_FRAMES, CURVATURE_TO_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_ERROR_MIN_SPEED,
 )
 

@@ -4,11 +4,13 @@
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
-cd $DIR
+ROOT="$(cd "$DIR/../../../.." && pwd)"
+cd "$ROOT/opendbc/safety/tests"
 
-source ../../../setup.sh
+source "$ROOT/setup.sh"
 
-# reset coverage data, then run the safety tests (the BluePilot ones live here too)
+# reset coverage data, then run upstream's safety tests (the BluePilot ones come in through
+# test_bluepilot_lateral.py, the loader)
 rm -f ./libsafety/*.gcda ./libsafety/*.gcno
 SAFETY_COVERAGE=1 python -m unittest discover -s .
 
@@ -18,7 +20,6 @@ else
   GCOV_EXEC="gcov"
 fi
 
-ROOT="$(cd ../../.. && pwd)"
 if ! OUT="$(gcovr -r "$ROOT" --gcov-executable "$GCOV_EXEC" -d --fail-under-line=100 \
              -f "$ROOT/opendbc/bluepilot_lateral/safety/" -f "$ROOT/opendbc/safety/modes/ford.h")"; then
   echo -e "FAILED:\n$OUT"

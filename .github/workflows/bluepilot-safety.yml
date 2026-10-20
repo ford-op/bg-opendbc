@@ -20,8 +20,8 @@ jobs:
     steps:
     - uses: actions/checkout@v7
     - name: Coverage
-      run: ./opendbc/safety/tests/bluepilot_coverage.sh
+      run: ./opendbc/bluepilot_lateral/safety/tests/bluepilot_coverage.sh
     - name: Mutation
       run: |
         source setup.sh
-        python opendbc/safety/tests/bluepilot_mutation.py
+        python opendbc/bluepilot_lateral/safety/tests/bluepilot_mutation.py

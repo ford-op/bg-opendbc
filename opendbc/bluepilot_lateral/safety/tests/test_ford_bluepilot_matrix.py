@@ -20,7 +20,7 @@ import opendbc.safety.tests.common as common
 from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP
 from opendbc.safety.tests import test_ford
 from opendbc.safety.tests.libsafety import libsafety_py
-from opendbc.safety.tests.ford_bluepilot_common import (
+from opendbc.bluepilot_lateral.safety.tests.ford_bluepilot_common import (
   BPFordLateralModel, CURVATURE_TO_CAN, MAX_CURVATURE_ERROR_CAN, CURVATURE_SIGNAL_MAX_CAN,
 )
 

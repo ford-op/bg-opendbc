@@ -43,7 +43,7 @@ class TestHostTypes(unittest.TestCase):
     modules = {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
     modules |= {node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
     for module in modules:
-      self.assertIn(module.split(".")[0], sys.stdlib_module_names, module)
+      self.assertTrue(module.split(".")[0] in sys.stdlib_module_names, module)
 
 
 if __name__ == "__main__":

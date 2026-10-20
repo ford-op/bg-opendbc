@@ -109,7 +109,7 @@ def default(key: str):
 
 
 def value(params, key: str):
-  """A per-frame setting from the CarControlSP.params ParamStore."""
+  """A per-frame setting from the host's ParamStore (built from this frame's (key, value) pairs)."""
   setting = _BY_KEY[key]
   assert setting.read != STARTUP, f"{key} is read at startup only: hosts don't publish it per frame"
   v = _parse(setting, params.get(key))

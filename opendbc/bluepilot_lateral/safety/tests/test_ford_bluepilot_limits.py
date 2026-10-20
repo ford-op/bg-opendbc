@@ -9,6 +9,7 @@ import random
 import unittest
 
 import opendbc.safety.tests.common as common
+from opendbc.can.dbc import DBC
 
 from opendbc.bluepilot_lateral.safety.tests.ford_bluepilot_common import (
   BPFordTestCase, angle_roc_delta, SMALL_ANGLE, FORMER_LATCH_WINDOW_FRAMES, CURVATURE_SIGNAL_MAX_CAN,
@@ -125,11 +126,17 @@ class TestFordBPLimitsCANFD(BPFordTestCase):
           self.assertFalse(self._probe(sign * (cap + 1), sign * cap))
 
   def test_max_curvature_hard_limit(self):
-    """+-0.02 rad/m (1000 CAN) regardless of speed. At 3 m/s the accel cap and the band are off."""
+    """+-0.02 rad/m (1000 CAN) regardless of speed. At 3 m/s the accel cap and the band are off. Only the
+    positive side has an over-cap frame: LatCtlCurv_No_Actl is 11 bits unsigned with offset -0.02, so its
+    minimum is exactly -0.02, and -1001 CAN units can't be sent (it wraps to +1047 on the wire)."""
     self.set_meas(0.02, 3.0)
     for sign in (1, -1):
       self.assertTrue(self._probe(sign * MAX_CURVATURE_CAN, sign * MAX_CURVATURE_CAN))
-      self.assertFalse(self._probe(sign * (MAX_CURVATURE_CAN + 1), sign * MAX_CURVATURE_CAN))
+    self.assertFalse(self._probe(MAX_CURVATURE_CAN + 1, MAX_CURVATURE_CAN))
+    name = "LateralMotionControl2" if self.CANFD else "LateralMotionControl"
+    sig = next(m for m in DBC("ford_lincoln_base_pt").msgs.values() if m.name == name).sigs["LatCtlCurv_No_Actl"]
+    self.assertFalse(sig.is_signed)
+    self.assertEqual(round(sig.offset * CURVATURE_TO_CAN), -MAX_CURVATURE_CAN)
 
   def test_over_cap_frame_resets_last(self):
     """A frame past the 0.02 cap resets desired_last to 0 (ford_bp_curvature_cmd_checks' own cap), so

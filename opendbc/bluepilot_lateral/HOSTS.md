@@ -32,7 +32,7 @@ Each path array has `host_types.MODEL_PATH_POINTS` (33) entries at the times in 
 
 ## Every frame: settings
 
-`CarControlSP.params`: every key in `values_ext.BP_LATERAL_PARAMS` (the per-frame settings in `params/manifest.py`), every frame, as `{key, value}` with the value as bytes: bools `"1"`/`"0"`, numbers as text. A missing, empty or unparsable value gives the manifest default. A host publishes its own registry default for a key nobody has set, so a host can carry its own defaults (BP7 uses 3.0 for `LC_PID_gain_UI_curv`). `python -m opendbc.bluepilot_lateral.params.manifest` prints the keys as `params_keys.h` lines.
+Every key in `opendbc.bluepilot_lateral.core.values_ext.BP_LATERAL_PARAMS` (the per-frame settings in `params/manifest.py`; hosts import the list from there), every frame, as (key, value) with the value as bytes (sunnypilot: `CarControlSP.params` entries): bools `"1"`/`"0"`, numbers as text. A missing, empty or unparsable value gives the manifest default. A host publishes its own registry default for a key nobody has set, so a host can carry its own defaults (BP7 uses 3.0 for `LC_PID_gain_UI_curv`). `python -m opendbc.bluepilot_lateral.params.manifest` prints the keys as `params_keys.h` lines.
 
 ## At startup: the safety bits
 
@@ -69,7 +69,6 @@ Every host is an opendbc fork, so the library uses these directly:
 - `opendbc.car`: `structs`, `DT_CTRL`, `ACCELERATION_DUE_TO_GRAVITY`, `scale_rot_inertia_per_mass`, `scale_tire_stiffness_per_mass`, `common.pid.PIDController`, `vehicle_model.VehicleModel`, `lateral` (`AngleSteeringLimits`, `apply_std_steer_angle_limits`, `ISO_LATERAL_ACCEL`), `ford.fordcan.CanBus`, `ford.values` (`CarControllerParams`, `FordFlags`).
 - The safety headers use `modes/ford.h`'s Ford constants and upstream's safety helpers. `safety/lateral.h` and `can/fordcan_ext.py` copy four upstream functions, pinned by `tests/test_bluepilot_upstream_copies.py`, so a host where one changed fails that test.
 - The safety tests use upstream's test harness: `opendbc.safety.tests.test_ford`, `common` and `libsafety.libsafety_py`.
-
 
 ## The core's API, and the sunnypilot adapter
 

@@ -14,8 +14,11 @@ def _imports(path):
     if isinstance(node, ast.Import):
       yield from (alias.name for alias in node.names)
     elif isinstance(node, ast.ImportFrom):
-      # a relative import of hosts (from ..hosts import x) counts too
-      yield ("." * node.level) + (node.module or "")
+      # relative imports count too (from ..hosts import x), and so does importing hosts by name
+      # (from opendbc.bluepilot_lateral import hosts, from .. import hosts)
+      module = ("." * node.level) + (node.module or "")
+      yield module
+      yield from (f"{module.rstrip('.')}.{alias.name}" if node.module else module + alias.name for alias in node.names)
 
 
 class TestCoreImports(unittest.TestCase):

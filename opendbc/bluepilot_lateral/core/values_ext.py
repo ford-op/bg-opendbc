@@ -22,7 +22,7 @@ class FordSafetyFlagsSP:
 
 
 # Geometry-table index for the steering-angle curvature measurement, packed into
-# CP_SP.safetyParam bits 1-4 when STEER_ANGLE_CURVATURE is set. Must match the
+# the startup safety bits 1-4 when STEER_ANGLE_CURVATURE is set. Must match the
 # ford_pinion_geometry table in bluepilot_lateral/safety/ford.h row for row.
 # Index 0 is reserved as invalid: the firmware treats flag-set-but-no-index as feature
 # off, so a half-configured param can never select the wrong geometry silently.

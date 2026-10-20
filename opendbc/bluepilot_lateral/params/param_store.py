@@ -12,6 +12,6 @@ class ParamStore:
     self._values = dict(pairs)
 
   def get(self, key):
-    """The published value as text, or None if the fork didn't publish the key."""
+    """The published value as text, or None if the host didn't publish the key."""
     v = self._values.get(key)
     return v.decode("utf-8", errors="replace") if isinstance(v, (bytes, bytearray)) else v

@@ -34,7 +34,7 @@
 #define FORD_PINION_GEOMETRY_ROWS 13U
 
 // Control signal limits -- curvature magnitude must match MAX_CURVATURE; rate tables must match
-// opendbc/sunnypilot/car/ford/values_ext.py BP_ANGLE_LIMITS.
+// opendbc/bluepilot_lateral/core/values_ext.py BP_ANGLE_LIMITS.
 #define FORD_CURVATURE_MIN -0.02f
 #define FORD_CURVATURE_MAX 0.02f
 #define FORD_PATH_OFFSET_MIN -1.0f

@@ -1,7 +1,7 @@
 import unittest
 
 from opendbc.car import structs
-from opendbc.bluepilot_lateral.core.carcontroller_ext import LateralInputs
+from opendbc.bluepilot_lateral.core.carcontroller_ext import InputTracker
 from opendbc.bluepilot_lateral.core.values_ext import MODEL_T_IDXS
 
 
@@ -28,7 +28,7 @@ def _cc_sp(valid=True):
 
 
 class _FakeInputs:
-  """Bare object carrying only the attributes LateralInputs.update touches."""
+  """Bare object carrying only the attributes InputTracker.update touches."""
   def __init__(self):
     self.model = None
     self.lp = None
@@ -40,10 +40,10 @@ class _FakeInputs:
     self.updated = (x, sr)
 
 
-class TestLateralInputs(unittest.TestCase):
+class TestInputTracker(unittest.TestCase):
   def test_model_view_has_modelv2_shape(self):
     ext = _FakeInputs()
-    LateralInputs.update(ext, _cc_sp())
+    InputTracker.update(ext, _cc_sp().lateralInputs)
     m = ext.model
     self.assertEqual(len(m.orientationRate.z), 33)
     self.assertEqual(m.position.y[10], 1.0)
@@ -56,7 +56,7 @@ class TestLateralInputs(unittest.TestCase):
 
   def test_vehicle_params_and_delay(self):
     ext = _FakeInputs()
-    LateralInputs.update(ext, _cc_sp())
+    InputTracker.update(ext, _cc_sp().lateralInputs)
     self.assertEqual(ext.lp.angleOffsetDeg, 0.3)
     self.assertEqual(ext.lp.roll, 0.02)
     self.assertEqual(ext.lateral_delay, 0.12)
@@ -64,8 +64,8 @@ class TestLateralInputs(unittest.TestCase):
 
   def test_invalid_inputs_leave_previous_values(self):
     ext = _FakeInputs()
-    LateralInputs.update(ext, _cc_sp())
-    LateralInputs.update(ext, _cc_sp(valid=False))
+    InputTracker.update(ext, _cc_sp().lateralInputs)
+    InputTracker.update(ext, _cc_sp(valid=False).lateralInputs)
     self.assertEqual(ext.lateral_delay, 0.12)
     self.assertIsNotNone(ext.model)
 
@@ -82,16 +82,16 @@ class TestLateralInputs(unittest.TestCase):
   def test_short_arrays_are_ignored_even_if_valid(self):
     # fuzzed / partial CC_SP: valid=True but arrays not the modelV2 shape -> frame ignored
     ext = _FakeInputs()
-    LateralInputs.update(ext, _cc_sp())
+    InputTracker.update(ext, _cc_sp().lateralInputs)
     bad = _cc_sp()
     bad.lateralInputs.laneLineLeftY = []
-    LateralInputs.update(ext, bad)
+    InputTracker.update(ext, bad.lateralInputs)
     self.assertEqual(ext.model.laneLines[1].y[0], -1.8)  # previous inputs kept
     empty = _cc_sp()
     empty.lateralInputs.pathYawRate = [0.0] * 10
-    LateralInputs.update(_FakeInputs(), empty)  # must not raise
+    InputTracker.update(_FakeInputs(), empty.lateralInputs)  # must not raise
     fresh = _FakeInputs()
-    LateralInputs.update(fresh, empty)
+    InputTracker.update(fresh, empty.lateralInputs)
     self.assertIsNone(fresh.model)
 
   def test_non_finite_inputs_are_ignored(self):
@@ -99,21 +99,21 @@ class TestLateralInputs(unittest.TestCase):
     for field, index in (("laneLineProbs", 1), ("laneLineStds", 2), ("pathYawRate", 5), ("pathY", 0), ("laneLineRightY", 32)):
       for bad_value in (float("nan"), float("inf")):
         ext = _FakeInputs()
-        LateralInputs.update(ext, _cc_sp())
+        InputTracker.update(ext, _cc_sp().lateralInputs)
         model, lp = ext.model, ext.lp
         bad = _cc_sp()
         values = list(getattr(bad.lateralInputs, field))
         values[index] = bad_value
         setattr(bad.lateralInputs, field, values)
-        LateralInputs.update(ext, bad)
+        InputTracker.update(ext, bad.lateralInputs)
         self.assertIs(ext.model, model, field)
         self.assertIs(ext.lp, lp, field)
     for field in ("steerRatio", "lateralDelay"):
       ext = _FakeInputs()
-      LateralInputs.update(ext, _cc_sp())
+      InputTracker.update(ext, _cc_sp().lateralInputs)
       bad = _cc_sp()
       setattr(bad.lateralInputs, field, float("nan"))
-      LateralInputs.update(ext, bad)
+      InputTracker.update(ext, bad.lateralInputs)
       self.assertEqual(ext.lp.steerRatio, 15.5, field)
       self.assertEqual(ext.lateral_delay, 0.12, field)
 

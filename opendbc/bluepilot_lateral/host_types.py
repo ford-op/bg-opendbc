@@ -4,6 +4,11 @@ Standard library only: opendbc/car/structs.py imports LateralInputs for CarContr
 anything in opendbc here would be an import cycle."""
 from dataclasses import dataclass, field
 
+# The model's prediction grid: every path array in LateralInputs has MODEL_PATH_POINTS entries at these
+# times, openpilot's ModelConstants.T_IDXS (t = 10 * (i / 32)^2). The core interpolates over it.
+MODEL_PATH_POINTS = 33
+MODEL_T_IDXS = [10.0 * (i / 32) ** 2 for i in range(MODEL_PATH_POINTS)]
+
 
 @dataclass
 class LateralInputs:

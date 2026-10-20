@@ -24,8 +24,8 @@ from opendbc.bluepilot_lateral.params.manifest import value
 from opendbc.bluepilot_lateral.params.param_store import ParamStore
 from opendbc.bluepilot_lateral.core.values_ext import FORD_PINION_WHEELBASE, FordSafetyFlagsSP
 from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
-from opendbc.bluepilot_lateral.host_types import LateralStatus
-from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
+from opendbc.bluepilot_lateral.host_types import LateralInputs, LateralStatus
+from opendbc.bluepilot_lateral.core.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
 
 
 def pinion_vehicle_model(CP):
@@ -43,12 +43,13 @@ def pinion_vehicle_model(CP):
     tireStiffnessFrontPerMass=front, tireStiffnessRearPerMass=rear))
 
 
-class LateralInputs:
+class InputTracker:
   """The model / vehicle-parameter inputs both strategies read, and the car's measured curvature.
-  Owned by BluePilotLateral and updated once per frame, before either strategy runs."""
+  Owned by BluePilotLateral and updated once per frame from the host's LateralInputs, before either
+  strategy runs."""
 
-  def __init__(self, CP, CP_SP):
-    # Model / vehicle-parameter inputs arrive per frame in CC_SP.lateralInputs (see update)
+  def __init__(self, CP, safety_param: int):
+    # Model / vehicle-parameter inputs arrive per frame from the host (see update)
     self.VM = pinion_vehicle_model(CP)  # used only for the pinion-angle curvature measurement
     self.model = None
     self.lp = None
@@ -57,10 +58,9 @@ class LateralInputs:
     # BluePilot: steering-angle curvature measurement (bad-yaw-sensor workaround).
     # Mirrors the STEER_ANGLE_CURVATURE flag the safety firmware reads from
     # current_safety_param_sp -- both layers must always agree, so this is init-time
-    # state from CP_SP (set by values_ext.init_ford_safety_param_sp at car init), never a live Params read:
+    # state from the startup safety bits (values_ext.ford_safety_param), never a live settings read:
     # a live flip against stale firmware would fight the panda.
-    self.bp_pinion_curvature_enabled = bool(
-      CP_SP is not None and (CP_SP.safetyParam & FordSafetyFlagsSP.STEER_ANGLE_CURVATURE))
+    self.bp_pinion_curvature_enabled = bool(safety_param & FordSafetyFlagsSP.STEER_ANGLE_CURVATURE)
 
   def get_current_curvature(self, CS):
     """Measured curvature of the car right now (OP sign convention).
@@ -89,14 +89,13 @@ class LateralInputs:
                                      CS.out.vEgoRaw, roll)
     return -CS.out.yawRate / max(CS.out.vEgoRaw, 0.1)
 
-  def update(self, CC_SP):
-    """Take this frame's model / vehicle-parameter inputs from CC_SP and update the vehicle model.
+  def update(self, li: LateralInputs):
+    """Take this frame's model / vehicle-parameter inputs from the host and update the vehicle model.
 
     A frame is used only if it has the full modelV2 shape this code indexes into (33 path points,
     both inner lane lines, 3+ probs/stds); anything else is ignored and the previous inputs are
-    kept, exactly as a stale SubMaster message was. That also makes fuzzed or partial CC_SP
+    kept, exactly as a stale SubMaster message was. That also makes fuzzed or partial inputs
     safe: the producer's valid flag is necessary but not trusted on its own."""
-    li = CC_SP.lateralInputs
     if li.valid and lateral_inputs_complete(li):
       self.model = ModelView(li)
       self.lp = VehicleParamsView(li)
@@ -121,10 +120,11 @@ class SharedLateralState:
 
 
 class BluePilotLateral:
-  def __init__(self, CP, CP_SP, packer, CAN):
+  def __init__(self, CP, safety_param: int, packer, CAN):
+    """safety_param: the startup safety bits the panda was given (values_ext.ford_safety_param)."""
     self.CP = CP
     self.frame = 0
-    self.inputs = LateralInputs(CP, CP_SP)
+    self.inputs = InputTracker(CP, safety_param)
     self.shared = SharedLateralState()
     self.curv = LateralCurvExt(self.inputs, self.shared)
     self.angle = LateralAngleExt(CP, self.inputs, self.shared)
@@ -134,15 +134,13 @@ class BluePilotLateral:
     self.disable_BP_lat_UI = False
     self.lateral_uncertainty = 0.0  # from whichever strategy ran last, for status()
     # the panda only accepts 4-signal messages when this bit was set at init
-    self.bp_lateral_allowed = bool(CP_SP.safetyParam & FordSafetyFlagsSP.BP_LATERAL)
+    self.bp_lateral_allowed = bool(safety_param & FordSafetyFlagsSP.BP_LATERAL)
 
-  def update(self, CC_SP, frame):
-    """Every frame: take this frame's model / vehicle-parameter inputs and UI params from CC_SP
-    (the fork fills both; opendbc reads nothing from openpilot directly). Returns whether
-    BluePilot lateral is active."""
+  def update(self, inputs: LateralInputs, params: ParamStore, frame):
+    """Every frame: take this frame's model / vehicle-parameter inputs and settings, both from the host
+    (HOSTS.md). Returns whether BluePilot lateral is active."""
     self.frame = frame
-    self.inputs.update(CC_SP)
-    params = ParamStore.from_cc_sp(CC_SP)
+    self.inputs.update(inputs)
     self.curv.update_lateral_params(params)
     self.angle.update_angle_params(params)
     # One flag for every BP consumer (LatCtl dispatch, LKA angle-mode bits, mode reporting): the UI

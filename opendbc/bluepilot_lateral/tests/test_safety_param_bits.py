@@ -3,8 +3,8 @@ import unittest
 from pathlib import Path
 
 from opendbc.car import structs
-from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT, \
-  init_ford_safety_param_sp
+from opendbc.bluepilot_lateral.core.values_ext import FordSafetyFlagsSP, FORD_PINION_GEOMETRY_INDEX, FORD_PINION_GEOMETRY_SHIFT
+from opendbc.bluepilot_lateral.hosts.sunnypilot.safety_param import init_ford_safety_param_sp
 from opendbc.car.ford.values import CAR
 
 SAFETY = Path(__file__).resolve().parents[1] / "safety"

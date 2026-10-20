@@ -1,12 +1,12 @@
 """
-BluePilot: adapt CarControlSP.lateralInputs to the modelV2 / vehicleParameters shape the lateral
-code reads. The fork fills lateralInputs once per frame; nothing here touches messaging.
+BluePilot: views over the host's LateralInputs (host_types.py) in the modelV2 / vehicleParameters shape
+the lateral code reads, and the check that a frame is complete. The host fills LateralInputs once per frame.
 """
 import math
 from itertools import chain
 from types import SimpleNamespace
 
-MODEL_PATH_POINTS = 33  # modelV2 orientationRate / position / laneLines length (ModelConstants.IDX_N)
+from opendbc.bluepilot_lateral.host_types import MODEL_PATH_POINTS
 
 
 def lateral_inputs_complete(li) -> bool:

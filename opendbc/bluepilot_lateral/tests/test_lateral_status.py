@@ -3,7 +3,6 @@ from dataclasses import fields
 from types import SimpleNamespace
 
 from opendbc.can import CANPacker
-from opendbc.car import structs
 from opendbc.car.ford import fordcan
 from opendbc.car.ford.interface import CarInterface
 from opendbc.car.ford.values import CAR
@@ -20,9 +19,7 @@ STATUS_NAMES = ["lateralUncertainty", "angleRateLimited", "curvatureRateLimited"
 
 def _bp():
   CP = CarInterface.get_non_essential_params(CAR.FORD_F_150_MK14)
-  CP_SP = structs.CarParamsSP()
-  CP_SP.safetyParam = FordSafetyFlagsSP.BP_LATERAL
-  return BluePilotLateral(CP, CP_SP, CANPacker("ford_lincoln_base_pt"), fordcan.CanBus(CP))
+  return BluePilotLateral(CP, FordSafetyFlagsSP.BP_LATERAL, CANPacker("ford_lincoln_base_pt"), fordcan.CanBus(CP))
 
 
 def _result(uncertainty):

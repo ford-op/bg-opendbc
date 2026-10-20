@@ -1,0 +1,33 @@
+import ast
+import unittest
+from pathlib import Path
+
+LIBRARY = Path(__file__).resolve().parents[1]
+# the host-independent parts: only hosts/ (an adapter per host) may know a host's types
+CORE_DIRS = ("core", "can", "params", "safety")
+FORBIDDEN = ("opendbc.bluepilot_lateral.hosts", "opendbc.sunnypilot", "openpilot", "cereal")
+
+
+def _imports(path):
+  tree = ast.parse(path.read_text())
+  for node in ast.walk(tree):
+    if isinstance(node, ast.Import):
+      yield from (alias.name for alias in node.names)
+    elif isinstance(node, ast.ImportFrom):
+      # a relative import of hosts (from ..hosts import x) counts too
+      yield ("." * node.level) + (node.module or "")
+
+
+class TestCoreImports(unittest.TestCase):
+  def test_core_imports_no_host(self):
+    files = [p for d in CORE_DIRS for p in sorted((LIBRARY / d).rglob("*.py"))]
+    self.assertTrue(files)
+    for path in files:
+      for module in _imports(path):
+        rel = path.relative_to(LIBRARY)
+        self.assertFalse(module.startswith(FORBIDDEN), f"{rel} imports {module}")
+        self.assertFalse(module.startswith(".") and "hosts" in module, f"{rel} imports {module}")
+
+
+if __name__ == "__main__":
+  unittest.main()

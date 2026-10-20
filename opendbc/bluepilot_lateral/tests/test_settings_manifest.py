@@ -3,7 +3,7 @@ import unittest
 from opendbc.car import structs
 from opendbc.bluepilot_lateral.params import manifest
 from opendbc.bluepilot_lateral.params.manifest import SETTINGS, PER_FRAME_KEYS, startup_value, value
-from opendbc.bluepilot_lateral.params.param_store import ParamStore
+from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral import params_from_cc_sp
 from opendbc.bluepilot_lateral.core.values_ext import BP_LATERAL_PARAMS
 
 
@@ -13,7 +13,7 @@ def _store(**kv):
     p = structs.CarControlSP.Param()
     p.key, p.value = k, v
     cc_sp.params.append(p)
-  return ParamStore.from_cc_sp(cc_sp)
+  return params_from_cc_sp(cc_sp)
 
 
 PARAMS_KEYS_H = [

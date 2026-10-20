@@ -1,16 +1,15 @@
 from opendbc.car import structs
 from opendbc.car.lateral import AngleSteeringLimits
+from opendbc.bluepilot_lateral import host_types
 from opendbc.bluepilot_lateral.params.manifest import PER_FRAME_KEYS, startup_value
 
 
 class FordSafetyFlagsSP:
-  """Sunnypilot-level safety flags for Ford.
-
-  Carried in CP_SP.safetyParam and delivered to the safety firmware as
-  current_safety_param_sp (the separate SP uint16, USB control 0xdf) -- NOT the main
-  safetyConfigs[].safetyParam. ford_bp_init reads it with GET_FLAG(current_safety_param_sp,
-  ...), same pattern as Subaru STOP_AND_GO (subaru_common.h). Plain int constants, not
-  IntFlag: CP_SP.safetyParam must stay a plain int through capnp serialization in card.
+  """BluePilot's Ford safety flags: the bits of the second safety param a host sends the panda
+  (current_safety_param_sp, USB control 0xdf), not the main safetyConfigs[].safetyParam (HOSTS.md).
+  ford_bp_init reads it with GET_FLAG(current_safety_param_sp, ...), same pattern as Subaru
+  STOP_AND_GO (subaru_common.h). Plain int constants, not IntFlag: the param must stay a plain int
+  through the host's serialization.
   """
   # Bit layout of the SP safety param (mirrored in ford_bp_init, bluepilot_lateral/safety/ford.h; pinned by
   # tests/test_safety_param_bits.py):
@@ -55,14 +54,14 @@ FORD_PINION_GEOMETRY_INDEX = {
 }
 
 
-def init_ford_safety_param_sp(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params_dict: dict[str, str]) -> None:
-  # Called from sunnypilot's setup_interfaces at car init.
-  # Steering-angle curvature measurement (bad-yaw-sensor workaround): sets the
-  # STEER_ANGLE_CURVATURE flag + the platform geometry-table index on CP_SP.safetyParam,
-  # which reaches the safety firmware as current_safety_param_sp (USB 0xdf); the control
-  # side mirrors the same flag (carcontroller_ext.LateralInputs.get_current_curvature). Platforms without
-  # a geometry row silently keep stock yaw behavior -- the toggle no-ops rather than
-  # half-configuring.
+def ford_safety_param(CP: structs.CarParams, params_dict: dict[str, str]) -> int:
+  """The startup safety bits for this car, from the startup settings (HOSTS.md). A host ORs them into the
+  second safety param it sends the panda (current_safety_param_sp, USB 0xdf) at car init."""
+  # Steering-angle curvature measurement (bad-yaw-sensor workaround): the STEER_ANGLE_CURVATURE flag +
+  # the platform geometry-table index; the control side mirrors the same flag
+  # (carcontroller_ext.InputTracker.get_current_curvature). Platforms without a geometry row silently
+  # keep stock yaw behavior -- the toggle no-ops rather than half-configuring.
+  bits = 0
   if CP.brand == 'ford':
     # BluePilot 4-signal lateral: tell the panda to run the BP checks. Read once here, at init;
     # the carcontroller sends 4-signal messages only when this bit is set. Changing the setting
@@ -71,7 +70,7 @@ def init_ford_safety_param_sp(CP: structs.CarParams, CP_SP: structs.CarParamsSP,
     # the next init. Same property as openpilot longitudinal.
     bp_lateral = not startup_value(params_dict, "disable_BP_lat_UI")
     if bp_lateral:
-      CP_SP.safetyParam |= FordSafetyFlagsSP.BP_LATERAL
+      bits |= FordSafetyFlagsSP.BP_LATERAL
 
     # The pinion-sourced measurement is a BP lateral feature: its wider error band and the
     # Python side's yaw-vs-pinion handling only line up on the BP path, so it is off whenever
@@ -80,7 +79,8 @@ def init_ford_safety_param_sp(CP: structs.CarParams, CP_SP: structs.CarParamsSP,
     if steer_angle_curvature:
       geometry_index = FORD_PINION_GEOMETRY_INDEX.get(CP.carFingerprint)
       if geometry_index is not None:
-        CP_SP.safetyParam |= FordSafetyFlagsSP.STEER_ANGLE_CURVATURE | (geometry_index << FORD_PINION_GEOMETRY_SHIFT)
+        bits |= FordSafetyFlagsSP.STEER_ANGLE_CURVATURE | (geometry_index << FORD_PINION_GEOMETRY_SHIFT)
+  return bits
 
 
 # Pinion geometry wheelbase (m) where BluePilot deliberately differs from CarSpecs. Used by both the
@@ -114,13 +114,12 @@ BP_ANGLE_LIMITS = AngleSteeringLimits(
 )
 
 
-# Mirror of openpilot's ModelConstants.T_IDXS (selfdrive/modeld/constants.py): the 33 prediction
-# times, t = 10 * (i / 32)^2. Kept here so the lateral code does not import openpilot.
-MODEL_T_IDXS = [10.0 * (i / 32) ** 2 for i in range(33)]
+# The model's prediction times, part of the host contract (host_types.py); the strategies read it from here.
+MODEL_T_IDXS = host_types.MODEL_T_IDXS
 
 
-# UI-tunable lateral params the fork publishes in CarControlSP.params every frame (its controlsd
-# imports this name). The settings, their defaults and how they are read are in params/manifest.py.
+# The per-frame settings a host publishes every frame (HOSTS.md; hosts import this name from here). The
+# settings, their defaults and how they are read are in params/manifest.py.
 BP_LATERAL_PARAMS = PER_FRAME_KEYS
 
 # Lane change smoothing, both modes: speed breakpoints (m/s) and the low-speed factor

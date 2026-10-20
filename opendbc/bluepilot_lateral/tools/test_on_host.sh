@@ -4,6 +4,10 @@
 # isn't touched. Uses this repo's Python environment; the working copy goes first on PYTHONPATH.
 # usage, in a bg-opendbc checkout: opendbc/bluepilot_lateral/tools/test_on_host.sh <sunnypilot/opendbc checkout> [base]
 set -euo pipefail
+if [ $# -lt 1 ]; then
+  echo "usage: $0 <sunnypilot/opendbc checkout> [base, default master]" >&2
+  exit 2
+fi
 HOST=$(cd "$1" && pwd)
 BASE=${2:-master}
 TOOLS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -14,7 +18,8 @@ trap 'rm -rf "$WORK"' EXIT
 
 git clone --quiet --shared "$HOST" "$WORK/host"
 git -C "$WORK/host" checkout --quiet "$(git -C "$HOST" rev-parse HEAD)"
-rsync -a --exclude __pycache__ --exclude '*.gc*' "$REPO/opendbc/bluepilot_lateral" "$WORK/host/opendbc/"
+# the library as committed, like the patch (a dirty working tree would test a mix that exists nowhere)
+git -C "$REPO" archive HEAD opendbc/bluepilot_lateral | tar -x -C "$WORK/host"
 (cd "$REPO" && "$TOOLS/make_hook_patch.sh" "$BASE") > "$WORK/hooks.patch"
 git -C "$WORK/host" apply "$WORK/hooks.patch"
 echo "host $(git -C "$HOST" rev-parse --short HEAD) + library + hook patch ($(grep -c '^diff --git' "$WORK/hooks.patch") files)"

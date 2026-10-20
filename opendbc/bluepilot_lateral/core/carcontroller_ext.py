@@ -198,12 +198,12 @@ class BluePilotLateral:
     angle_mode = self.curv.primary_lateral_control == PrimaryLateralControl.angle
     return LateralStatus(
       lateralUncertainty=self.lateral_uncertainty,
-      angleRateLimited=angle_mode and self.angle.bp_angle_rate_limited,
-      curvatureRateLimited=angle_mode and self.angle.bp_curvature_rate_limited,
-      curvatureDeviationLimited=self.shared.bp_curvature_deviation_limited,
-      humanTurnLateralPaused=angle_mode and self.angle.angle_human_turn_active,
-      stallBlipActive=angle_mode and self.angle.angle_stall_blip_active,
-      disable_BP_lat_UI=self.disable_BP_lat_UI,
+      angleRateLimited=bool(angle_mode and self.angle.bp_angle_rate_limited),
+      curvatureRateLimited=bool(angle_mode and self.angle.bp_curvature_rate_limited),
+      curvatureDeviationLimited=bool(self.shared.bp_curvature_deviation_limited),
+      humanTurnLateralPaused=bool(angle_mode and self.angle.angle_human_turn_active),
+      stallBlipActive=bool(angle_mode and self.angle.angle_stall_blip_active),
+      disable_BP_lat_UI=bool(self.disable_BP_lat_UI),
       primary_lateral_control=int(self.curv.primary_lateral_control),
     )
 

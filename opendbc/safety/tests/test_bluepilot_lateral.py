@@ -11,13 +11,18 @@ LIBRARY_SAFETY_TESTS = ROOT / "opendbc" / "bluepilot_lateral" / "safety" / "test
 
 def _class_suites(suite):
   for test in suite:
-    if any(isinstance(child, unittest.TestSuite) for child in test):
+    if isinstance(test, unittest.TestCase):
+      yield unittest.TestSuite([test])
+    elif any(isinstance(child, unittest.TestSuite) for child in test):
       yield from _class_suites(test)
     else:
       yield test
 
 
 def load_tests(loader, standard_tests, pattern):
-  # a fresh loader: discover() inside another discover() would share the outer one's top-level dir
-  found = unittest.TestLoader().discover(str(LIBRARY_SAFETY_TESTS), top_level_dir=str(ROOT))
+  # a fresh loader: discover() inside another discover() would share the outer one's top-level dir.
+  # It keeps the outer one's -k patterns.
+  inner = unittest.TestLoader()
+  inner.testNamePatterns = loader.testNamePatterns
+  found = inner.discover(str(LIBRARY_SAFETY_TESTS), top_level_dir=str(ROOT))
   return unittest.TestSuite(_class_suites(found))

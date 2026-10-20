@@ -70,7 +70,7 @@ Every host is an opendbc fork, so the library uses these directly:
 - The safety headers use `modes/ford.h`'s Ford constants and upstream's safety helpers. `safety/lateral.h` and `can/fordcan_ext.py` copy four upstream functions, pinned by `tests/test_bluepilot_upstream_copies.py`, so a host where one changed fails that test.
 - The safety tests use upstream's test harness: `opendbc.safety.tests.test_ford`, `common` and `libsafety.libsafety_py`.
 
-The core still reads `CC_SP` and `CP_SP` directly; 3h (#64) moves that into a sunnypilot adapter, with the settings as a `ParamStore` built from (key, value) pairs and the startup bits as a plain integer.
+The library's own types for the settings and the startup bits are a `ParamStore` built from (key, value) pairs and a plain integer. Today the core still reads them from sunnypilot's `CC_SP` and `CP_SP` directly.
 
 ## Running the tests
 

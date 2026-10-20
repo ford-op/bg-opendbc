@@ -33,7 +33,7 @@ class LateralStatus:
   """This frame's values for a BluePilot UI, from BluePilotLateral.status(). The names are the ones
   BP7's controllerStateBP publisher reads off its car controller; the four angle-mode values read
   False outside angle mode, as BP7 sets them."""
-  lateralUncertainty: float = 0.0          # from whichever strategy ran this frame
+  lateralUncertainty: float = 0.0          # from whichever strategy ran last
   angleRateLimited: bool = False           # angle mode: the path_angle soft-ROC clip bit this frame
   curvatureRateLimited: bool = False       # angle mode: the equivalent curvature would have been rate-limited
   curvatureDeviationLimited: bool = False  # either mode: the current-curvature error clip constrained the command

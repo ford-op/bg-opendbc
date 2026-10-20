@@ -26,3 +26,18 @@ class LateralInputs:
   roll: float = 0.0
   angleOffsetDeg: float = 0.0
   lateralDelay: float = 0.0     # lateralDelay.lateralDelay
+
+
+@dataclass
+class LateralStatus:
+  """This frame's values for a BluePilot UI, from BluePilotLateral.status(). The names are the ones
+  BP7's controllerStateBP publisher reads off its car controller; the four angle-mode values read
+  False outside angle mode, as BP7 sets them."""
+  lateralUncertainty: float = 0.0          # from whichever strategy ran this frame
+  angleRateLimited: bool = False           # angle mode: the path_angle soft-ROC clip bit this frame
+  curvatureRateLimited: bool = False       # angle mode: the equivalent curvature would have been rate-limited
+  curvatureDeviationLimited: bool = False  # either mode: the current-curvature error clip constrained the command
+  humanTurnLateralPaused: bool = False     # angle mode: lateral sent inactive during a manual turn
+  stallBlipActive: bool = False            # angle mode: the brief mode-0 pulse after a post-override stall
+  disable_BP_lat_UI: bool = False          # BluePilot lateral off: the UI toggle, or the panda bit not set at init
+  primary_lateral_control: int = 0         # 0 = curvature, 1 = angle

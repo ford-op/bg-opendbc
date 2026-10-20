@@ -24,6 +24,7 @@ from opendbc.bluepilot_lateral.params.manifest import value
 from opendbc.bluepilot_lateral.params.param_store import ParamStore
 from opendbc.bluepilot_lateral.core.values_ext import FORD_PINION_WHEELBASE, FordSafetyFlagsSP
 from opendbc.bluepilot_lateral.core.human_turn import HumanTurnDetector
+from opendbc.bluepilot_lateral.host_types import LateralStatus
 from opendbc.bluepilot_lateral.hosts.sunnypilot.lateral_inputs import ModelView, VehicleParamsView, lateral_inputs_complete
 
 
@@ -131,6 +132,7 @@ class BluePilotLateral:
     self.CAN = CAN
 
     self.disable_BP_lat_UI = False
+    self.lateral_uncertainty = 0.0  # from whichever strategy ran last, for status()
     # the panda only accepts 4-signal messages when this bit was set at init
     self.bp_lateral_allowed = bool(CP_SP.safetyParam & FordSafetyFlagsSP.BP_LATERAL)
 
@@ -164,6 +166,7 @@ class BluePilotLateral:
     else:
       lat = self.curv.update(CC, CS, actuators, apply_curvature_last, self.CP)
     apply_curvature = float(lat.apply_curvature)
+    self.lateral_uncertainty = float(lat.lateralUncertainty)
 
     # BluePilot: angle-mode human-turn override -- send lateral inactive (mode 0) while the
     # driver manually turns, so the PSCM releases cleanly instead of stalling 2-3 s on
@@ -189,6 +192,20 @@ class BluePilotLateral:
         -lat.path_offset, -lat.path_angle, -lat.apply_curvature, -lat.curvature_rate
       ))
     return can_sends, apply_curvature
+
+  def status(self) -> LateralStatus:
+    """This frame's values for a BluePilot UI (HOSTS.md), as BP7 sets them on its car controller."""
+    angle_mode = self.curv.primary_lateral_control == PrimaryLateralControl.angle
+    return LateralStatus(
+      lateralUncertainty=self.lateral_uncertainty,
+      angleRateLimited=angle_mode and self.angle.bp_angle_rate_limited,
+      curvatureRateLimited=angle_mode and self.angle.bp_curvature_rate_limited,
+      curvatureDeviationLimited=self.shared.bp_curvature_deviation_limited,
+      humanTurnLateralPaused=angle_mode and self.angle.angle_human_turn_active,
+      stallBlipActive=angle_mode and self.angle.angle_stall_blip_active,
+      disable_BP_lat_UI=self.disable_BP_lat_UI,
+      primary_lateral_control=int(self.curv.primary_lateral_control),
+    )
 
   def step_lka(self, CC, hud_control):
     """At LKA_STEP: the Lane_Assist_Data1 message."""

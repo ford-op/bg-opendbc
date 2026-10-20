@@ -8,6 +8,6 @@
 .github/workflows/update-cars-docs.yml # upstream automation, inert in forks
 .github/workflows/update-uv-lock.yml   # upstream automation, inert in forks
 opendbc/car/ford/carcontroller.py      # one BluePilotLateral object, stock path as the fallback (#45)
-opendbc/car/structs.py                 # the LateralInputs dataclass the fork fills per frame
+opendbc/car/structs.py                 # CarControlSP.lateralInputs, typed by bluepilot_lateral/host_types.py
 opendbc/safety/modes/ford.h            # one call per hook site into bluepilot_lateral/safety/ford.h (#46)
 opendbc/sunnypilot/car/interfaces.py   # one call for the BluePilot safety-param bits (#45)

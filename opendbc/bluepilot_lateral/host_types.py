@@ -1,0 +1,28 @@
+"""BluePilot: the types a host hands the library and reads back from it (HOSTS.md).
+
+Standard library only: opendbc/car/structs.py imports LateralInputs for CarControlSP, so an import of
+anything in opendbc here would be an import cycle."""
+from dataclasses import dataclass, field
+
+
+@dataclass
+class LateralInputs:
+  """Per-frame model / vehicle inputs for the Ford 4-signal lateral control. The host fills them from
+  modelV2 / vehicleParameters / lateralDelay, so opendbc never subscribes to messaging."""
+  valid: bool = False                     # producer saw model + vehicle params and filled every field below
+  pathYawRate: list[float] = field(default_factory=list)  # modelV2.orientationRate.z, 33 points over T_IDXS
+  pathX: list[float] = field(default_factory=list)        # modelV2.position.x
+  pathY: list[float] = field(default_factory=list)        # modelV2.position.y
+  laneLineLeftX: list[float] = field(default_factory=list)   # modelV2.laneLines[1]
+  laneLineLeftY: list[float] = field(default_factory=list)
+  laneLineRightX: list[float] = field(default_factory=list)  # modelV2.laneLines[2]
+  laneLineRightY: list[float] = field(default_factory=list)
+  laneLineProbs: list[float] = field(default_factory=list)   # 4 entries
+  laneLineStds: list[float] = field(default_factory=list)
+  laneChangeState: int = 0      # modelV2.meta.laneChangeState
+  laneChangeDirection: int = 0  # modelV2.meta.laneChangeDirection
+  steerRatio: float = 0.0       # vehicleParameters
+  stiffnessFactor: float = 0.0
+  roll: float = 0.0
+  angleOffsetDeg: float = 0.0
+  lateralDelay: float = 0.0     # lateralDelay.lateralDelay

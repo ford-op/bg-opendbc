@@ -12,7 +12,7 @@ A host is an opendbc fork (sunnypilot/opendbc today) with this library at `opend
 | `opendbc/car/structs.py` | Imports `LateralInputs` from `host_types.py` and adds `CarControlSP.lateralInputs`. |
 | `opendbc/sunnypilot/car/interfaces.py` | Calls `values_ext.init_ford_safety_param_sp(CP, CP_SP, params_dict)` at car init: the startup safety bits below. |
 | `opendbc/safety/modes/ford.h` | Includes `safety/ford.h` and makes one call per hook site: counter and quality checks for the pinion message, the yaw measurement skipped while the pinion source is on, `ford_bp_rx_hook` (pinion measurement), `ford_bp_lka_tx` (angle-mode state from Lane_Assist_Data1), `ford_bp_lmc_tx` in place of the stock steering check when `BP_LATERAL` is set (the stock check runs unchanged when it isn't), and the pinion RX check list from `ford_bp_init`. |
-| `opendbc/safety/tests/test_bluepilot_lateral.py` | New: hands `safety/tests/` to upstream's test discovery, so upstream's `test.sh` and `mutation.py` run the BluePilot safety tests. |
+| `opendbc/safety/tests/test_bluepilot_lateral.py` | New: hands the library's `safety/tests/` to upstream's test discovery, so upstream's `test.sh` and `mutation.py` run the BluePilot safety tests. |
 
 ## Every frame: inputs
 

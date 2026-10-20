@@ -61,6 +61,22 @@ class TestLateralStatus(unittest.TestCase):
     self.assertEqual(s.primary_lateral_control, 1)
     self.assertIs(type(s.primary_lateral_control), int)
 
+  def test_each_value_from_its_own_source(self):
+    # one source at a time, so two swapped sources can't pass
+    sources = {"angleRateLimited": (self.bp.angle, "bp_angle_rate_limited"),
+               "curvatureRateLimited": (self.bp.angle, "bp_curvature_rate_limited"),
+               "humanTurnLateralPaused": (self.bp.angle, "angle_human_turn_active"),
+               "stallBlipActive": (self.bp.angle, "angle_stall_blip_active"),
+               "curvatureDeviationLimited": (self.bp.shared, "bp_curvature_deviation_limited"),
+               "disable_BP_lat_UI": (self.bp, "disable_BP_lat_UI")}
+    self.bp.curv.primary_lateral_control = PrimaryLateralControl.angle
+    for field, (obj, attr) in sources.items():
+      for o, a in sources.values():
+        setattr(o, a, False)
+      setattr(obj, attr, True)
+      s = self.bp.status()
+      self.assertEqual([f for f in sources if getattr(s, f)], [field], field)
+
   def test_uncertainty_from_whichever_strategy_ran(self):
     self.bp.angle.angle_human_turn_active = self.bp.angle.angle_stall_blip_active = False
     self.bp.angle.update_angle_strategy = lambda *a: _result(0.25)

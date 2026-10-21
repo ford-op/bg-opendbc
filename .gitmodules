@@ -1,3 +1,4 @@
 [submodule "opendbc/bluepilot_lateral"]
 	path = opendbc/bluepilot_lateral
 	url = https://github.com/ford-op/bluepilot-lateral.git
+	branch = release

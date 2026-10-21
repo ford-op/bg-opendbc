@@ -56,5 +56,5 @@ Bit numbers are within the byte, 7 = most significant. Stock signals are from `f
 
 ## Not here yet
 
-A protocol-version byte and a shared bit allocation for other forks (StarPilot) are Phase 3 (#27):
+A protocol-version byte and a shared bit allocation for other forks (StarPilot) are Phase 3 (ford-op/bg-opendbc#27):
 they change bytes on the wire.

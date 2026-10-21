@@ -2,6 +2,10 @@
 
 A host is an opendbc fork (sunnypilot/opendbc today) with this library at `opendbc/bluepilot_lateral/` and the hook patch applied, plus the openpilot on top of it that fills the library's inputs each frame (bp-sunnypilot today; BP7 later). This page is what a host provides and what it gets back.
 
+## Mounting the library
+
+A host mounts this repo as a git submodule at `opendbc/bluepilot_lateral/` inside its opendbc, so the Python imports (`opendbc.bluepilot_lateral`) and the safety `#include "opendbc/bluepilot_lateral/safety/ford.h"` resolve the same in every host. A plain folder at the same path (a subtree) works too. Updating is a bump of the submodule's commit. The hook patch below carries every file bg-opendbc adds or changes outside the library, so once bg-opendbc mounts the library it also carries the mount's `.gitmodules` entry.
+
 ## The hook patch
 
 `tools/make_hook_patch.sh` prints it: every file outside the library that bg-opendbc changes from `master`, minus bg-opendbc's own `.github/` (its CI). It fails unless the edited files are exactly the non-`.github` entries of `.github/bluepilot-hooks.txt`.
@@ -88,4 +92,4 @@ Another host writes its own adapter against the same API.
 
 - Python tests: `python -m unittest discover -s opendbc/bluepilot_lateral/tests -t .`
 - Safety tests: upstream's `opendbc/safety/tests/test.sh` runs them through the loader. Coverage of the BluePilot headers and `modes/ford.h`: `safety/tests/bluepilot_coverage.sh`; mutation: `safety/tests/bluepilot_mutation.py`.
-- On a clean sunnypilot/opendbc checkout: `tools/test_on_host.sh <checkout>`, from a bg-opendbc checkout. It applies the library and the hook patch to a temporary clone and runs both.
+- On a clean sunnypilot/opendbc checkout: `tools/test_on_host.sh <checkout>`, from a bg-opendbc checkout. It copies the library as committed and applies the hook patch to a temporary clone, then runs both.

@@ -11,15 +11,18 @@ fi
 HOST=$(cd "$1" && pwd)
 BASE=${2:-master}
 TOOLS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-REPO=$(cd "$TOOLS/../../.." && pwd)
+LIB=$(cd "$TOOLS/.." && pwd)
+REPO=$(cd "$LIB/../.." && pwd)
 PY=${PYTHON:-$REPO/.venv/bin/python}
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 git clone --quiet --shared "$HOST" "$WORK/host"
 git -C "$WORK/host" checkout --quiet "$(git -C "$HOST" rev-parse HEAD)"
-# the library as committed, like the patch (a dirty working tree would test a mix that exists nowhere)
-git -C "$REPO" archive HEAD opendbc/bluepilot_lateral | tar -x -C "$WORK/host"
+# the library as committed, like the patch (a dirty working tree would test a mix that exists nowhere);
+# archived from inside it, so a plain folder, a submodule and a subtree all work
+mkdir -p "$WORK/host/opendbc/bluepilot_lateral"
+git -C "$LIB" archive HEAD | tar -x -C "$WORK/host/opendbc/bluepilot_lateral"
 (cd "$REPO" && "$TOOLS/make_hook_patch.sh" "$BASE") > "$WORK/hooks.patch"
 git -C "$WORK/host" apply "$WORK/hooks.patch"
 echo "host $(git -C "$HOST" rev-parse --short HEAD) + library + hook patch ($(grep -c '^diff --git' "$WORK/hooks.patch") files)"

@@ -22,6 +22,8 @@ jobs:
             name: macOS
     steps:
     - uses: actions/checkout@v7
+      with:
+        submodules: true  # BluePilot: the library submodule (opendbc/bluepilot_lateral)
     - uses: commaai/timeout@v1
       with:
         timeout: ${{ github.repository == 'commaai/opendbc' && '90' || '999' }}
@@ -35,6 +37,8 @@ jobs:
       with:
         timeout: ${{ github.repository == 'commaai/opendbc' && '60' || '999' }}
     - uses: actions/checkout@v7
+      with:
+        submodules: true  # BluePilot: the library submodule (opendbc/bluepilot_lateral)
     - name: Run safety tests
       run: ./opendbc/safety/tests/test.sh
 
@@ -52,6 +56,8 @@ jobs:
             name: macOS
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true  # BluePilot: the library submodule (opendbc/bluepilot_lateral)
       - name: Run mutation tests
         run: |
           source setup.sh
@@ -111,6 +117,8 @@ jobs:
       CI: 1
     steps:
     - uses: actions/checkout@v7
+      with:
+        submodules: true  # BluePilot: the library submodule (opendbc/bluepilot_lateral)
     - run: ./setup.sh
     - name: Cache test routes
       id: routes-cache

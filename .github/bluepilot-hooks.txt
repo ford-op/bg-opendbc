@@ -4,7 +4,7 @@
 
 .github/workflows/auto_pr_review.yaml  # upstream's welcome comment, inert in forks
 .github/workflows/release.yml          # upstream automation, inert in forks
-.github/workflows/tests.yml            # also runs on pushes to bg-clean
+.github/workflows/tests.yml            # also runs on pushes to bg-clean; its jobs fetch the library submodule
 .github/workflows/update-cars-docs.yml # upstream automation, inert in forks
 .github/workflows/update-uv-lock.yml   # upstream automation, inert in forks
 opendbc/car/ford/carcontroller.py      # one BluePilotLateral object, stock path as the fallback (#45)

@@ -118,10 +118,17 @@ jobs:
         { echo "pr=$pr"; echo "up=$up"; echo "clean=$clean"; } >> "$GITHUB_OUTPUT"
     # BluePilot (#102): a clean sync can't change what bp-sunnypilot runs (it pins opendbc_repo) or lateral
     # behavior (the library), and bg-clean's required checks still gate it, so it merges itself on green.
+    # a fresh App token: the wait below can outlast the first one (App tokens last an hour)
+    - uses: actions/create-github-app-token@v2
+      id: app2
+      if: steps.sync.outputs.clean == 'yes'
+      with:
+        app-id: ${{ secrets.SYNC_APP_ID }}
+        private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
     - name: Merge when clean
       if: steps.sync.outputs.clean == 'yes'
       env:
-        GH_TOKEN: ${{ steps.app.outputs.token }}
+        GH_TOKEN: ${{ steps.app2.outputs.token }}
         REPO: ${{ github.repository }}
         PR: ${{ steps.sync.outputs.pr }}
         UP: ${{ steps.sync.outputs.up }}
@@ -130,9 +137,11 @@ jobs:
         # bg-clean's required checks (its branch protection; the App can't read protection, so they're
         # listed, as in bluepilot-lateral's release_bumps.sh)
         REQUIRED=("./test.sh (Linux)" "safety" "bluepilot-safety" "bluepilot-hooks")
-        wait_required() {  # 0 all passed, 1 one failed, 2 still running after about 60 minutes
+        wait_required() {  # 0 all passed, 1 one failed, 2 still running after about 50 minutes
           local out n state
-          for _ in $(seq 180); do
+          for _ in $(seq 150); do
+            # only trust checks for the new head: right after the push the PR can still show the old one's
+            if [ "$(gh pr view "$PR" -R "$REPO" --json headRefOid -q .headRefOid 2>/dev/null)" != "$UP" ]; then sleep 20; continue; fi
             out=$(gh pr checks "$PR" -R "$REPO" --required --json name,bucket 2>/dev/null || true)
             if jq -e 'any(.[]; .bucket == "fail" or .bucket == "cancel")' <<<"${out:-[]}" >/dev/null; then
               jq -r '.[] | select(.bucket == "fail" or .bucket == "cancel") | "failed: \(.name)"' <<<"$out"; return 1
@@ -152,5 +161,5 @@ jobs:
           0) gh pr merge "$PR" -R "$REPO" --merge --match-head-commit "$UP"
              echo "merged #$PR with a merge commit" ;;
           1) echo "::error::#$PR: a required check failed; it stays open"; exit 1 ;;
-          2) echo "::notice::#$PR: required checks still running after 60 minutes; the next night's run tries again" ;;
+          2) echo "::notice::#$PR: required checks still running after 50 minutes; the next night's run tries again" ;;
         esac

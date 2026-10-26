@@ -1,11 +1,13 @@
 # BluePilot: nightly upstream sync (spec: #18). Fast-forwards `master` to sunnypilot/opendbc
-# `master` and keeps one PR open from `master` into `bg-clean`. It never merges and never
-# force-pushes: if `master` is not a fast-forward of upstream it stops and opens an issue.
+# `master` and keeps one PR open from `master` into `bg-clean`. It merges that PR itself (merge commit)
+# only when it's clean, no conflicts and no file both sides changed, and `bg-clean`'s required checks
+# pass (#102); anything else waits for a person. It never force-pushes: if `master` is not a
+# fast-forward of upstream it stops and opens an issue.
 name: upstream sync
 
 on:
   schedule:
-    - cron: '17 7 * * *'  # nightly, 07:17 UTC
+    - cron: '17 3 * * *'  # nightly, 03:17 UTC: four hours ahead of bp-sunnypilot's sync, which reads bg-clean
   workflow_dispatch:
 
 permissions: {}
@@ -17,7 +19,7 @@ jobs:
   sync:
     if: github.repository == 'ford-op/bg-opendbc'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 75
     steps:
     # GITHUB_TOKEN can't be used: pushes and PRs made with it don't start CI. The ford-op-sync
     # App can push `master` (branch protection allows only it) and its PRs run CI normally.
@@ -31,6 +33,7 @@ jobs:
         fetch-depth: 0
         token: ${{ steps.app.outputs.token }}
     - name: Sync
+      id: sync
       env:
         GH_TOKEN: ${{ steps.app.outputs.token }}
         REPO: ${{ github.repository }}
@@ -79,16 +82,23 @@ jobs:
         # exit 1 means conflicts or an error; only a real result starts with the merged tree's ID
         grep -qE '^[0-9a-f]{40}$' <<<"$(head -n1 <<<"$out")" || { echo "::error::merge-tree failed"; exit 1; }
         conflicts=$(tail -n +2 <<<"$out" | sed 's/^/- /')
+        overlap=$(comm -12 <(git diff --name-only "$base" "$up" | sort) <(git diff --name-only "$base" "$integration" | sort) | sed 's/^/- /')
+        clean=$([ -z "$conflicts$overlap" ] && echo yes || echo no)
         {
           echo "Automated nightly sync of sunnypilot/opendbc \`master\` into \`$INTEGRATION\` (#18). Upstream \`${base:0:8}..${up:0:8}\`."
           echo
           echo "**Merge with a merge commit, not squash, and don't delete the branch.** The head is \`$MIRROR\` itself; a squash leaves upstream's commits out of \`$INTEGRATION\` and the job reopens this PR every night."
           echo
+          if [ "$clean" = yes ]; then
+            echo "✅ Clean (no conflicts, no file both sides changed): the job merges this itself once the required checks pass (#102)."
+          else
+            echo "⚠️ Not clean: this waits for a person (#102)."
+          fi
+          echo
           echo "### Upstream commits"
           git log -n 200 --format='- %h %s' "$integration..$up"
           echo
           echo "### Files upstream changed that BluePilot also changes"
-          overlap=$(comm -12 <(git diff --name-only "$base" "$up" | sort) <(git diff --name-only "$base" "$integration" | sort) | sed 's/^/- /')
           echo "${overlap:-None.}"
           echo
           if [ -n "$conflicts" ]; then
@@ -102,5 +112,45 @@ jobs:
         if [ -n "$pr" ]; then
           gh pr edit "$pr" -R "$REPO" --body-file pr.md
         else
-          gh pr create -R "$REPO" --head "$MIRROR" --base "$INTEGRATION" --title "sync: sunnypilot/opendbc master → $INTEGRATION" --body-file pr.md
+          pr=$(gh pr create -R "$REPO" --head "$MIRROR" --base "$INTEGRATION" --title "sync: sunnypilot/opendbc master → $INTEGRATION" --body-file pr.md)
+          pr=${pr##*/}
         fi
+        { echo "pr=$pr"; echo "up=$up"; echo "clean=$clean"; } >> "$GITHUB_OUTPUT"
+    # BluePilot (#102): a clean sync can't change what bp-sunnypilot runs (it pins opendbc_repo) or lateral
+    # behavior (the library), and bg-clean's required checks still gate it, so it merges itself on green.
+    - name: Merge when clean
+      if: steps.sync.outputs.clean == 'yes'
+      env:
+        GH_TOKEN: ${{ steps.app.outputs.token }}
+        REPO: ${{ github.repository }}
+        PR: ${{ steps.sync.outputs.pr }}
+        UP: ${{ steps.sync.outputs.up }}
+      run: |
+        set -euo pipefail
+        # bg-clean's required checks (its branch protection; the App can't read protection, so they're
+        # listed, as in bluepilot-lateral's release_bumps.sh)
+        REQUIRED=("./test.sh (Linux)" "safety" "bluepilot-safety" "bluepilot-hooks")
+        wait_required() {  # 0 all passed, 1 one failed, 2 still running after about 60 minutes
+          local out n state
+          for _ in $(seq 180); do
+            out=$(gh pr checks "$PR" -R "$REPO" --required --json name,bucket 2>/dev/null || true)
+            if jq -e 'any(.[]; .bucket == "fail" or .bucket == "cancel")' <<<"${out:-[]}" >/dev/null; then
+              jq -r '.[] | select(.bucket == "fail" or .bucket == "cancel") | "failed: \(.name)"' <<<"$out"; return 1
+            fi
+            n=0
+            for name in "${REQUIRED[@]}"; do
+              state=$(jq -r --arg n "$name" 'first(.[] | select(.name == $n) | .bucket) // empty' <<<"${out:-[]}")
+              [ "$state" = pass ] && n=$((n + 1))
+            done
+            [ "$n" = "${#REQUIRED[@]}" ] && return 0
+            sleep 20
+          done
+          return 2
+        }
+        rc=0; wait_required || rc=$?
+        case $rc in
+          0) gh pr merge "$PR" -R "$REPO" --merge --match-head-commit "$UP"
+             echo "merged #$PR with a merge commit" ;;
+          1) echo "::error::#$PR: a required check failed; it stays open"; exit 1 ;;
+          2) echo "::notice::#$PR: required checks still running after 60 minutes; the next night's run tries again" ;;
+        esac
